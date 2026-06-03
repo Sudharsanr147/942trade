@@ -753,18 +753,23 @@ async function findInstrument(expiry, strike, type) {
    BALANCE — for auto-lots calculation
 ════════════════════════════════════════════════════ */
 async function getAvailableFunds() {
-  // GET /v2/user/fund-and-margin?segment=SEC
-  // Returns available margin for NSE equity/F&O segment
-  const d = await upstox('/v2/user/fund-and-margin?segment=SEC');
-  const eq = d?.data?.equity;
-  if (!eq) throw new Error('No equity segment in fund response');
-  // Try known field names in order of preference
-  const funds = parseFloat(
-    eq.available_margin ?? eq.available_cash ?? eq.net ?? 0
-  );
-  if (!funds || isNaN(funds) || funds <= 0)
-    throw new Error('Available margin is zero or unreadable');
-  return funds;
+  // Try both known Upstox v2 endpoint variants
+  const endpoints = [
+    '/v2/user/fund-and-margin?segment=SEC',
+    '/v2/user/fund-and-margin',
+    '/v2/user/funds-and-margin',
+  ];
+  for (const ep of endpoints) {
+    try {
+      const d = await upstox(ep);
+      const eq = d?.data?.equity || d?.data;
+      const funds = parseFloat(
+        eq?.available_margin ?? eq?.available_cash ?? eq?.net ?? 0
+      );
+      if (funds > 0) { lg(`💰 Balance read from ${ep}`, 'i'); return funds; }
+    } catch(_) {}
+  }
+  throw new Error('Fund-and-margin endpoint not found — using manual lots');
 }
 
 /* ════════════════════════════════════════════════════
@@ -786,6 +791,30 @@ function setAutoLots(v) {
 
   persist();
 }
+/* ════════════════════════════════════════════════════
+   DIRECT ORDER CALL — bypasses Cloudflare Worker
+   Uses device's actual IP so Upstox IP whitelist works.
+   Market data still goes through Cloudflare (no IP restriction there).
+════════════════════════════════════════════════════ */
+async function directUpstox(path, method, body) {
+  const res = await fetch('https://api.upstox.com' + path, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${ST.accessToken}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Api-Version': '2.0'
+    },
+    body: JSON.stringify(body)
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = json?.errors?.[0]?.message || json?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return json;
+}
+
 async function placeMarket(instrKey, txn, qty) {
   // txn: 'BUY' | 'SELL'
   const body = {
@@ -794,14 +823,15 @@ async function placeMarket(instrKey, txn, qty) {
     validity:           'DAY',
     price:              0,
     tag:                'nifty_trader',
-    instrument_token:   instrKey,      // Upstox v2 field name
+    instrument_token:   instrKey,
     order_type:         'MARKET',
     transaction_type:   txn,
     disclosed_quantity: 0,
     trigger_price:      0,
     is_amo:             false
   };
-  const d = await upstox('/v2/order/place', 'POST', body);
+  // Direct call — uses phone IP, not Cloudflare IP
+  const d = await directUpstox('/v2/order/place', 'POST', body);
   const id = d?.data?.order_id;
   if (!id) throw new Error('No order_id returned');
   return id;
