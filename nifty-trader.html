@@ -357,9 +357,28 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         <input id="t-entry" type="time" step="1" value="09:42:45">
       </div>
       <div class="fld">
-        <label>Auto-Exit Time</label>
-        <input id="t-exit" type="time" step="1" value="10:15:00">
+        <label>Duration</label>
+        <select id="duration">
+          <option value="10">10 min</option>
+          <option value="15">15 min</option>
+          <option value="20">20 min</option>
+          <option value="25">25 min</option>
+          <option value="30" selected>30 min</option>
+          <option value="45">45 min</option>
+          <option value="60">60 min</option>
+          <option value="90">90 min</option>
+        </select>
       </div>
+    </div>
+    <div class="fld">
+      <label>Auto-Exit Time — editable, or auto-filled from Entry + Duration</label>
+      <input id="t-exit" type="time" step="1" value="10:12:45">
+    </div>
+
+    <!-- Enter NOW button -->
+    <button class="btn btn-amber" onclick="armAndEnterNow()" style="margin-bottom:8px">⚡ Arm &amp; Enter NOW</button>
+    <div class="info" style="font-size:11px;margin-bottom:0">
+      "Enter NOW" captures the current time as entry and sets exit = now + duration. Direction must be set first.
     </div>
 
     <div class="sec">Strike Selection</div>
@@ -556,6 +575,7 @@ const ST = {
   dir:       null,         // 'CE' | 'PE'
   entryTime: '09:42:45',
   exitTime:  '10:15:00',
+  duration:  30,          // minutes from entry to auto-exit
   otm:       1,
   step:      50,
   sl:        30,
@@ -596,7 +616,7 @@ function persist() {
   const d = {
     workerUrl: ST.workerUrl, apiKey: ST.apiKey, apiSecret: ST.apiSecret,
     accessToken: ST.accessToken, mode: ST.mode, dir: ST.dir,
-    entryTime: ST.entryTime, exitTime: ST.exitTime,
+    entryTime: ST.entryTime, exitTime: ST.exitTime, duration: ST.duration,
     otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
     lots: ST.lots, lotSize: ST.lotSize,
     autoLots: ST.autoLots, deployPct: ST.deployPct,
@@ -873,6 +893,48 @@ async function waitFill(orderId, retries = 15) {
 }
 
 /* ════════════════════════════════════════════════════
+   TIMING HELPERS
+════════════════════════════════════════════════════ */
+function calcExitTime(entryStr, mins) {
+  const [h, m, s] = entryStr.split(':').map(Number);
+  const total = h * 3600 + m * 60 + (s || 0) + mins * 60;
+  const eh = Math.floor(total / 3600) % 24;
+  const em = Math.floor((total % 3600) / 60);
+  const es = total % 60;
+  return [eh, em, es].map(v => String(v).padStart(2, '0')).join(':');
+}
+
+function syncExitTime() {
+  const entry = q('t-entry').value;
+  const dur   = parseInt(q('duration').value) || 30;
+  if (entry) q('t-exit').value = calcExitTime(entry, dur);
+}
+
+// Arm + fire immediately (current time as entry)
+function armAndEnterNow() {
+  if (!ST.accessToken) { alert('Authenticate first (Setup tab)'); return; }
+  if (!ST.dir)         { alert('Select CE or PE direction first'); return; }
+
+  // Capture current time as entry
+  const now = new Date();
+  const entryTime = now.toTimeString().slice(0, 8);
+  q('t-entry').value = entryTime;
+
+  // Auto-calculate exit from duration
+  const dur = parseInt(q('duration').value) || 30;
+  q('t-exit').value = calcExitTime(entryTime, dur);
+
+  // Arm with these values
+  arm();
+
+  // Fire immediately — bypass the scheduled timer
+  if (ST.armed) {
+    clearTimeout(ST._entryTimer);
+    onEntryTime();
+  }
+}
+
+/* ════════════════════════════════════════════════════
    STRATEGY ENGINE
 ════════════════════════════════════════════════════ */
 function arm() {
@@ -881,6 +943,7 @@ function arm() {
   // Direction not required to arm — can pick on Monitor at entry time
   ST.entryTime = q('t-entry').value;
   ST.exitTime  = q('t-exit').value;
+  ST.duration  = parseInt(q('duration').value) || 30;
   ST.otm       = parseInt(q('otm').value);
   ST.step      = parseInt(q('step').value);
   ST.sl        = parseFloat(q('sl').value);
@@ -1462,6 +1525,13 @@ function init() {
   q('lots').value       = ST.lots;
   q('lotsize').value    = ST.lotSize;
   q('deploy-pct').value = ST.deployPct;
+
+  // Restore duration dropdown
+  q('duration').value = ST.duration || 30;
+
+  // Auto-sync exit time when entry time or duration changes
+  q('t-entry').addEventListener('change', syncExitTime);
+  q('duration').addEventListener('change', syncExitTime);
 
   // Restore UI state
   setMode(ST.mode);
