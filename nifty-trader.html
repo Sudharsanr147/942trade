@@ -312,6 +312,15 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
     <hr>
 
+    <button class="btn btn-ghost" id="btn-ipcheck" style="font-size:13px;padding:10px">🌐 Check My Current IP</button>
+    <div id="ip-display" style="display:none;margin-top:8px;padding:10px 12px;background:var(--s3);border-radius:var(--r);font-family:var(--mono);font-size:12px">
+      <div style="color:var(--dim);font-size:10px;margin-bottom:4px">YOUR CURRENT EXTERNAL IP</div>
+      <div id="ip-val" style="color:var(--amber);font-size:15px;font-weight:700"></div>
+      <div id="ip-note" style="color:var(--dim);font-size:10px;margin-top:4px"></div>
+    </div>
+
+    <hr>
+
     <button class="btn btn-ghost" id="btn-save">Save Settings</button>
     <button class="btn btn-danger" id="btn-clear">Clear All Saved Data</button>
 
@@ -591,6 +600,14 @@ function persist() {
     otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
     lots: ST.lots, lotSize: ST.lotSize,
     autoLots: ST.autoLots, deployPct: ST.deployPct,
+    // Persist active trade so it survives phone restart/app reload
+    armed: ST.armed,
+    savedStatus: ST.status,
+    instr: ST.instr,
+    entryPrice: ST.entryPrice,
+    slLevel: ST.slLevel,
+    tgtLevel: ST.tgtLevel,
+    entryOrderId: ST.entryOrderId,
     events: ST.events.slice(0, 120)
   };
   localStorage.setItem('nt3', JSON.stringify(d));
@@ -1085,6 +1102,7 @@ async function doSquareOff(reason) {
     lg(`✅ Square off placed: ${orderId}`, 's');
     setStatus('done');
     ST.armed = false;
+    ST.savedStatus = 'done';
     releaseWakeLock();
 
     const estPnl = ST.entryPrice ? ((ST.optionPrice || ST.entryPrice) - ST.entryPrice) * qty : 0;
@@ -1136,14 +1154,28 @@ async function monitorTick() {
     if (ST.entryPrice !== null) {
       if (optLTP <= ST.slLevel) {
         lg(`🛑 SL HIT — option ₹${optLTP} ≤ SL ₹${ST.slLevel.toFixed(2)}`, 'e');
-        notify('Stop Loss Hit 🛑', `Option ₹${optLTP}`);
-        if (ST.mode === 'auto') { await doSquareOff('SL hit'); }
-        else { beep(220, 1.5); lg('Semi-auto: tap Square Off to exit', 'w'); }
+        notify('Stop Loss Hit 🛑', `Option ₹${optLTP} — open app and Square Off`);
+        if (ST.mode === 'auto') {
+          await doSquareOff('SL hit');
+        } else {
+          stopMonitor();            // stop repeating every 5s
+          setStatus('sl_hit');      // clear status so user sees urgent prompt
+          beep(220, 1.5);
+          lg('🛑 Tap SQUARE OFF NOW to exit position', 'e');
+          persist();
+        }
       } else if (optLTP >= ST.tgtLevel) {
         lg(`🎯 TARGET HIT — option ₹${optLTP} ≥ TGT ₹${ST.tgtLevel.toFixed(2)}`, 's');
-        notify('Target Hit 🎯', `Option ₹${optLTP}`);
-        if (ST.mode === 'auto') { await doSquareOff('Target hit'); }
-        else { beep(1047, 0.8); lg('Semi-auto: tap Square Off to exit', 'w'); }
+        notify('Target Hit 🎯', `Option ₹${optLTP} — open app and Square Off`);
+        if (ST.mode === 'auto') {
+          await doSquareOff('Target hit');
+        } else {
+          stopMonitor();            // stop repeating every 5s
+          setStatus('tgt_hit');
+          beep(1047, 0.8);
+          lg('🎯 Tap SQUARE OFF NOW to book profit', 's');
+          persist();
+        }
       }
     }
   } catch(e) {
@@ -1253,12 +1285,15 @@ const STATUS_CFG = {
   confirm:    ['b-confirm', 'AWAITING CONFIRM',   false],
   placed:     ['b-placed',  'ORDER PLACED',       false],
   live:       ['b-live',    'IN TRADE ●',         true ],
+  sl_hit:     ['b-exited',  '🛑 SL HIT — EXIT!', true ],
+  tgt_hit:    ['b-done',    '🎯 TGT HIT — EXIT!',true ],
   exit:       ['b-exit',    'EXITING…',           true ],
   done:       ['b-done',    'COMPLETE',           false],
 };
 
 function setStatus(s) {
   ST.status = s;
+  ST.savedStatus = s; // keep savedStatus in sync for restart recovery
   const [cls, lbl, bl] = STATUS_CFG[s] || ['b-idle', s.toUpperCase(), false];
   const el = q('status-badge');
   el.className  = 'badge ' + cls + (bl ? ' blink' : '');
@@ -1430,15 +1465,65 @@ function init() {
 
   // Restore UI state
   setMode(ST.mode);
-  if (ST.dir) setDir(ST.dir); // also updates dir-ind badge in Monitor
-  if (ST.autoLots) setAutoLots(true);  // restore toggle; default (false) needs no action
-  setStatus('idle'); // always start clean — don't resume mid-trade after reload
+  if (ST.dir) setDir(ST.dir);
+  if (ST.autoLots) setAutoLots(true);
   if (ST.accessToken) setConn(true);
+
+  // ── Restore active trade if app restarted mid-trade ──────────
+  const activeStatuses = ['live', 'sl_hit', 'tgt_hit', 'placed'];
+  if (ST.armed && ST.entryOrderId && activeStatuses.includes(ST.savedStatus)) {
+    setStatus(ST.savedStatus);
+    q('sltgt-card').style.display = 'block';
+    q('sl-level').textContent  = ST.slLevel  ? `₹${parseFloat(ST.slLevel).toFixed(2)}`  : '—';
+    q('tgt-level').textContent = ST.tgtLevel ? `₹${parseFloat(ST.tgtLevel).toFixed(2)}` : '—';
+    q('entry-px').textContent  = ST.entryPrice ? parseFloat(ST.entryPrice).toFixed(2) : '—';
+    q('qty-lbl').textContent   = `${ST.lots * ST.lotSize} (${ST.lots} lot)`;
+    if (ST.instr) q('instr-lbl').textContent = `${ST.instr.strike}${ST.instr.type} ${ST.instr.expiry}`;
+    showSqOff(true);
+    q('btn-arm').style.display    = 'none';
+    q('btn-disarm').style.display = 'block';
+    if (ST.savedStatus === 'live') {
+      startMonitor();
+      startSpotRefresh();
+      requestWakeLock();
+    }
+    lg('📱 Trade restored after restart — tap Square Off if position already closed in Upstox', 'w');
+    go('monitor'); // jump straight to monitor tab
+  } else {
+    setStatus('idle');
+  }
 
   renderLog();
 
   // Button listeners
   q('btn-auth').onclick  = doAuth;
+  q('btn-ipcheck').onclick = async () => {
+    q('ip-val').textContent  = 'Checking…';
+    q('ip-note').textContent = '';
+    q('ip-display').style.display = 'block';
+    try {
+      // Fetch both IPv4 and IPv6 to show user exactly what Upstox will see
+      const [v4res, v6res] = await Promise.allSettled([
+        fetch('https://api4.ipify.org?format=json').then(r => r.json()),
+        fetch('https://api6.ipify.org?format=json').then(r => r.json())
+      ]);
+      const v4 = v4res.status === 'fulfilled' ? v4res.value.ip : null;
+      const v6 = v6res.status === 'fulfilled' ? v6res.value.ip : null;
+
+      if (v6) {
+        q('ip-val').textContent  = v6;
+        q('ip-note').textContent = '⚠️ IPv6 active — whitelist this in Upstox Secondary IP, or set APN Protocol to IPv4 only';
+        q('ip-val').style.color  = 'var(--red)';
+        if (v4) q('ip-note').textContent += `\nIPv4: ${v4}`;
+      } else if (v4) {
+        q('ip-val').textContent  = v4;
+        q('ip-note').textContent = '✅ IPv4 only — whitelist this in Upstox Primary IP';
+        q('ip-val').style.color  = 'var(--green)';
+      }
+    } catch(e) {
+      q('ip-val').textContent = 'Failed to fetch IP';
+    }
+  };
   q('btn-save').onclick  = () => {
     ST.workerUrl = q('worker-url').value.trim();
     ST.apiKey    = q('api-key').value.trim();
