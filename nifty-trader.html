@@ -681,17 +681,53 @@ async function getOptLTP(instrKey) {
   return parseFloat(Object.values(d?.data || {})[0]?.last_price) || 0;
 }
 
-function calcExpiry() {
-  // NIFTY weekly expiry = Thursday
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun … 4=Thu … 6=Sat
-  const isThuBeforeClose = day === 4 &&
-    (now.getHours() * 60 + now.getMinutes()) < 15 * 60 + 30;
-  if (isThuBeforeClose) return now.toISOString().split('T')[0];
-  const skip = (4 - day + 7) % 7 || 7;
-  const d = new Date(now);
-  d.setDate(now.getDate() + skip);
-  return d.toISOString().split('T')[0];
+async function getLiveExpiry() {
+  const key = encodeURIComponent('NSE_INDEX|Nifty 50');
+
+  // Step 1: Try calling without expiry_date — some Upstox responses include expiry_list
+  try {
+    const d = await upstox(`/v2/option/chain?instrument_key=${key}`);
+    const expiries = d?.data?.expiry_list || d?.data?.expiryList;
+    if (Array.isArray(expiries) && expiries.length) {
+      const today = new Date().toISOString().split('T')[0];
+      const nearest = expiries.filter(e => e >= today).sort()[0];
+      if (nearest) { lg(`📅 Expiry from API list: ${nearest}`, 's'); return nearest; }
+    }
+  } catch(_) {}
+
+  // Step 2: Compute next Tuesday (NIFTY expiry day)
+  // If Tuesday is a holiday, step back to Monday → Friday → Thursday
+  const now  = new Date();
+  const day  = now.getDay(); // 0=Sun 1=Mon 2=Tue … 6=Sat
+  const isTuOpen = day === 2 && (now.getHours() * 60 + now.getMinutes()) < 15 * 60 + 30;
+  const daysAhead = isTuOpen ? 0 : ((2 - day + 7) % 7 || 7);
+
+  const candidates = [];
+  for (let i = 0; i <= 5; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + daysAhead - i);
+    if (d.getDay() !== 0) candidates.push(d.toISOString().split('T')[0]); // skip Sunday
+  }
+
+  lg(`📅 Scanning expiry candidates: ${candidates.slice(0, 4).join(', ')}`, 'i');
+
+  // Step 3: Try each candidate — first one with a non-empty chain wins
+  for (const expiry of candidates) {
+    try {
+      const d = await upstox(`/v2/option/chain?instrument_key=${key}&expiry_date=${expiry}`);
+      if (Array.isArray(d?.data) && d.data.length > 0) {
+        lg(`📅 Live expiry confirmed: ${expiry} (${d.data.length} strikes)`, 's');
+        return expiry;
+      }
+      lg(`📅 ${expiry}: empty chain — trying previous day`, 'w');
+    } catch(e) {
+      lg(`📅 ${expiry}: ${e.message} — trying previous day`, 'w');
+    }
+  }
+
+  // Last resort — return the computed Tuesday
+  lg(`⚠️ Could not confirm expiry, defaulting to ${candidates[0]}`, 'w');
+  return candidates[0];
 }
 
 async function findInstrument(expiry, strike, type) {
@@ -917,7 +953,7 @@ async function onEntryTime() {
 
     const atm    = Math.round(spot / ST.step) * ST.step;
     const strike = ST.dir === 'CE' ? atm + ST.otm * ST.step : atm - ST.otm * ST.step;
-    const expiry = calcExpiry();
+    const expiry = await getLiveExpiry();  // fetches live from Upstox, handles holidays
 
     lg(`Spot: ${spot.toFixed(2)}, ATM: ${atm}, Strike: ${strike}${ST.dir}, Expiry: ${expiry}`, 'i');
 
