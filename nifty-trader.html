@@ -574,6 +574,7 @@ const ST = {
   _dirTimeout:    null,   // timeout when waiting for direction at entry time
   _monitorIvl:    null,
   _spotIvl:       null,
+  _watchdogIvl:   null,   // 10s backup — fires entry if timer was killed by Android
 
   // Log
   events: []
@@ -825,6 +826,7 @@ function arm() {
   }
 
   startSpotRefresh();
+  startEntryWatchdog();
   requestWakeLock();
   if (!ST.dir) {
     lg('⚠️ No direction set — pick CE/PE on Monitor tab before entry time', 'w');
@@ -882,7 +884,12 @@ function pickDirMonitor(dir) {
 
 /* ── Entry sequence ─────────────────────────────── */
 async function onEntryTime() {
-  if (!ST.armed || !['armed', 'choose_dir'].includes(ST.status)) return;
+  if (!ST.armed) {
+    lg('⚠️ Entry fired but strategy not armed — ignored', 'w'); return;
+  }
+  if (!['armed', 'choose_dir'].includes(ST.status)) {
+    lg(`⚠️ Entry fired but status is "${ST.status}" — ignored`, 'w'); return;
+  }
 
   // If no direction selected yet, pause and show the Monitor prompt
   if (!ST.dir) {
@@ -1092,10 +1099,31 @@ function startSpotRefresh() {
 }
 
 function stopSpotRefresh() { clearInterval(ST._spotIvl); ST._spotIvl = null; }
+
+// Watchdog: every 10s backup check — fires entry if setTimeout was killed by Android
+function startEntryWatchdog() {
+  stopEntryWatchdog();
+  ST._watchdogIvl = setInterval(() => {
+    if (!ST.armed || !['armed', 'choose_dir'].includes(ST.status)) {
+      stopEntryWatchdog(); return;
+    }
+    const ms = msTo(ST.entryTime);
+    // Entry time has passed (within last 5 min) but trade not fired
+    if (ms <= 0 && ms > -300000) {
+      lg('⏰ Watchdog: entry time passed, timer may have been killed — triggering now', 'w');
+      stopEntryWatchdog();
+      clearTimeout(ST._entryTimer);
+      onEntryTime();
+    }
+  }, 10000);
+}
+
+function stopEntryWatchdog() { clearInterval(ST._watchdogIvl); ST._watchdogIvl = null; }
+
 function clearAllTimers() {
   clearTimeout(ST._entryTimer); clearTimeout(ST._exitTimer);
   clearTimeout(ST._dirTimeout);
-  stopMonitor(); stopSpotRefresh();
+  stopMonitor(); stopSpotRefresh(); stopEntryWatchdog();
 }
 
 /* ════════════════════════════════════════════════════
@@ -1202,6 +1230,11 @@ function lg(msg, type = 'i') {
   ST.events.unshift({ t, msg, type });
   if (ST.events.length > 200) ST.events.pop();
   renderLog();
+  // Persist every log entry so events survive page reload
+  try { localStorage.setItem('nt3', JSON.stringify(
+    JSON.parse(localStorage.getItem('nt3') || '{}')
+  )); } catch(_) {}
+  persist();
 }
 
 function renderLog() {
@@ -1289,10 +1322,20 @@ function releaseWakeLock() {
   q('wl-ind').style.display = 'none';
 }
 
-// Re-acquire wake lock if page becomes visible again while armed
+// Re-acquire wake lock and check entry time when app comes back to foreground
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && ST.armed && !_wakeLock) {
-    await requestWakeLock();
+  if (document.visibilityState === 'visible') {
+    // Re-acquire wake lock
+    if (ST.armed && !_wakeLock) await requestWakeLock();
+    // Check if entry time passed while app was backgrounded
+    if (ST.armed && ['armed', 'choose_dir'].includes(ST.status)) {
+      const ms = msTo(ST.entryTime);
+      if (ms <= 0 && ms > -300000) {
+        lg('📱 App resumed — entry time passed while backgrounded. Triggering now.', 'w');
+        clearTimeout(ST._entryTimer);
+        onEntryTime();
+      }
+    }
   }
 });
 
