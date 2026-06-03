@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#08090d">
+<title>NIFTY Trader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════
+   VARIABLES
+══════════════════════════════════════════════ */
+:root {
+  --bg:     #08090d;
+  --s1:     #0d1018;
+  --s2:     #131820;
+  --s3:     #1c2535;
+  --bdr:    #1e2d42;
+  --txt:    #ccd8e8;
+  --dim:    #4a6070;
+  --green:  #00d478;
+  --red:    #ff2d55;
+  --amber:  #f5a623;
+  --blue:   #1e90ff;
+  --purple: #7c5cff;
+  --mono:   'JetBrains Mono', monospace;
+  --sans:   'IBM Plex Sans', sans-serif;
+  --r:      8px;
+}
+
+/* ══════════════════════════════════════════════
+   RESET + BASE
+══════════════════════════════════════════════ */
+*,*::before,*::after {
+  margin:0; padding:0; box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+}
+html,body {
+  height:100%; background:var(--bg); color:var(--txt);
+  font-family:var(--sans); -webkit-font-smoothing:antialiased;
+}
+
+/* ══════════════════════════════════════════════
+   APP SHELL
+══════════════════════════════════════════════ */
+#app {
+  display:flex; flex-direction:column;
+  height:100dvh; max-width:500px; margin:0 auto;
+}
+
+/* HEADER */
+#hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:13px 16px 11px;
+  background:var(--s1); border-bottom:1px solid var(--bdr);
+  flex-shrink:0;
+}
+.h-title {
+  font-family:var(--mono); font-size:13px; font-weight:700;
+  letter-spacing:0.14em; color:var(--blue);
+}
+.h-right { display:flex; align-items:center; gap:8px; }
+.c-txt  { font-size:11px; color:var(--dim); }
+.c-dot  { width:7px; height:7px; border-radius:50%; background:var(--dim); transition:all .3s; }
+.c-dot.live { background:var(--green); box-shadow:0 0 6px var(--green); }
+.c-dot.err  { background:var(--red); }
+
+/* CONTENT */
+#content {
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+}
+.tab { display:none; padding:16px; }
+.tab.on { display:block; }
+
+/* BOTTOM NAV */
+#nav {
+  display:flex; background:var(--s1); border-top:1px solid var(--bdr);
+  flex-shrink:0; padding-bottom:env(safe-area-inset-bottom,0);
+}
+.nb {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  padding:9px 0 7px; gap:3px;
+  background:none; border:none; color:var(--dim);
+  font-family:var(--sans); font-size:10px; font-weight:500;
+  letter-spacing:.02em; cursor:pointer; transition:color .15s;
+}
+.nb svg { width:19px; height:19px; stroke-width:1.8; }
+.nb.on  { color:var(--blue); }
+
+/* ══════════════════════════════════════════════
+   FORM ELEMENTS
+══════════════════════════════════════════════ */
+.sec {
+  font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--dim); margin:20px 0 10px;
+}
+.sec:first-child { margin-top:0; }
+
+.fld { margin-bottom:10px; }
+.fld label { display:block; font-size:11px; color:var(--dim); margin-bottom:5px; }
+.fld input, .fld select {
+  width:100%; background:var(--s2); border:1px solid var(--bdr);
+  border-radius:var(--r); padding:10px 12px; color:var(--txt);
+  font-family:var(--mono); font-size:13px; outline:none;
+  transition:border-color .2s; appearance:none;
+}
+.fld input:focus,.fld select:focus { border-color:var(--blue); }
+.fld input[readonly] { color:var(--blue); font-size:11px; opacity:.8; }
+
+.row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+/* ══════════════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════════════ */
+.btn {
+  display:block; width:100%; padding:13px;
+  border:none; border-radius:var(--r);
+  font-family:var(--sans); font-size:14px; font-weight:600;
+  letter-spacing:.02em; cursor:pointer; text-align:center;
+  transition:filter .15s, transform .1s;
+}
+.btn:active    { transform:scale(.98); }
+.btn:disabled  { opacity:.35; cursor:not-allowed; }
+.btn + .btn    { margin-top:8px; }
+.btn-blue      { background:var(--blue);  color:#fff; }
+.btn-green     { background:var(--green); color:#000; }
+.btn-red       { background:var(--red);   color:#fff; }
+.btn-amber     { background:var(--amber); color:#000; }
+.btn-ghost     { background:var(--s2); color:var(--txt); border:1px solid var(--bdr); }
+.btn-danger    { background:transparent; color:var(--red); border:1px solid #2e1018; font-size:12px; padding:10px; }
+.btn-sm        { font-size:13px; padding:10px; }
+
+/* ══════════════════════════════════════════════
+   CARDS
+══════════════════════════════════════════════ */
+.card {
+  background:var(--s2); border:1px solid var(--bdr);
+  border-radius:var(--r); padding:14px; margin-bottom:10px;
+}
+.card.glow-b { border-color:rgba(30,144,255,.4); box-shadow:0 0 20px rgba(30,144,255,.08); }
+.card.glow-g { border-color:rgba(0,212,120,.35); box-shadow:0 0 20px rgba(0,212,120,.08); }
+.card.glow-r { border-color:rgba(255,45,85,.35);  box-shadow:0 0 20px rgba(255,45,85,.08); }
+
+.cr {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 0;
+}
+.cr + .cr { border-top:1px solid var(--bdr); }
+.cr-l { font-size:11px; color:var(--dim); }
+.cr-v { font-family:var(--mono); font-size:13px; font-weight:600; }
+
+/* ══════════════════════════════════════════════
+   STAT GRID
+══════════════════════════════════════════════ */
+.sgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.sbox  { background:var(--s2); border:1px solid var(--bdr); border-radius:var(--r); padding:12px; }
+.sl    { font-size:9px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:5px; }
+.sv    { font-family:var(--mono); font-size:20px; font-weight:700; letter-spacing:-.02em; }
+.sv.b  { color:var(--blue); }
+.sv.g  { color:var(--green); }
+.sv.r  { color:var(--red); }
+.sv.a  { color:var(--amber); }
+.sv.d  { color:var(--dim); }
+
+/* ══════════════════════════════════════════════
+   DIRECTION BUTTONS
+══════════════════════════════════════════════ */
+.drow { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.dbtn {
+  padding:14px 8px; border:2px solid var(--bdr); border-radius:var(--r);
+  background:var(--s2); color:var(--dim); cursor:pointer; text-align:center;
+  font-family:var(--mono); font-size:15px; font-weight:700;
+  transition:all .2s; line-height:1.3;
+}
+.dbtn small { display:block; font-size:9px; font-weight:400; letter-spacing:.06em; margin-top:2px; }
+.dbtn.ce  { border-color:var(--green); color:var(--green); background:rgba(0,212,120,.08); }
+.dbtn.pe  { border-color:var(--red);   color:var(--red);   background:rgba(255,45,85,.08); }
+
+/* ══════════════════════════════════════════════
+   MODE TOGGLE
+══════════════════════════════════════════════ */
+.mrow {
+  display:flex; background:var(--s2); border:1px solid var(--bdr);
+  border-radius:var(--r); padding:3px; margin-bottom:10px;
+}
+.mbtn {
+  flex:1; padding:9px; border:none; border-radius:6px;
+  background:none; color:var(--dim);
+  font-family:var(--sans); font-size:13px; font-weight:500;
+  cursor:pointer; transition:all .2s;
+}
+.mbtn.on { background:var(--s3); color:var(--txt); }
+
+/* ══════════════════════════════════════════════
+   BADGE
+══════════════════════════════════════════════ */
+.badge {
+  display:inline-block; padding:3px 9px;
+  border-radius:4px; font-family:var(--mono);
+  font-size:11px; font-weight:600; letter-spacing:.06em;
+}
+.b-idle    { background:var(--s3); color:var(--dim); }
+.b-armed   { background:rgba(245,166,35,.14);  color:var(--amber); }
+.b-ready   { background:rgba(30,144,255,.14);  color:var(--blue); }
+.b-confirm { background:rgba(124,92,255,.18);  color:var(--purple); }
+.b-placed  { background:rgba(124,92,255,.18);  color:var(--purple); }
+.b-live    { background:rgba(0,212,120,.14);   color:var(--green); }
+.b-exit    { background:rgba(245,166,35,.14);  color:var(--amber); }
+.b-done    { background:rgba(0,212,120,.14);   color:var(--green); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.blink { animation:blink 1.2s ease-in-out infinite; }
+
+/* ══════════════════════════════════════════════
+   COUNTDOWN
+══════════════════════════════════════════════ */
+.ct-wrap  { text-align:center; padding:10px 0 6px; }
+.ct-time  { font-family:var(--mono); font-size:34px; font-weight:700; color:var(--amber); letter-spacing:.04em; }
+.ct-lbl   { font-size:11px; color:var(--dim); margin-top:4px; letter-spacing:.06em; }
+
+/* ══════════════════════════════════════════════
+   INFO BOX
+══════════════════════════════════════════════ */
+.info {
+  background:rgba(30,144,255,.05); border:1px solid rgba(30,144,255,.18);
+  border-radius:var(--r); padding:12px 14px; font-size:12px;
+  color:var(--dim); line-height:1.6; margin-bottom:10px;
+}
+.info code {
+  font-family:var(--mono); font-size:11px; color:var(--blue);
+  background:rgba(30,144,255,.12); padding:1px 5px; border-radius:3px;
+}
+
+/* ══════════════════════════════════════════════
+   LOG
+══════════════════════════════════════════════ */
+.li {
+  display:flex; gap:10px; padding:9px 12px;
+  background:var(--s2); border-radius:6px;
+  border-left:2px solid var(--bdr);
+  font-size:12px; margin-bottom:5px;
+  animation:fadeIn .2s ease;
+}
+.li.i { border-left-color:var(--blue); }
+.li.s { border-left-color:var(--green); }
+.li.e { border-left-color:var(--red); }
+.li.w { border-left-color:var(--amber); }
+.lt { font-family:var(--mono); font-size:10px; color:var(--dim); white-space:nowrap; padding-top:1px; min-width:56px; }
+
+/* ══════════════════════════════════════════════
+   MISC
+══════════════════════════════════════════════ */
+hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
+::-webkit-scrollbar { width:3px; }
+::-webkit-scrollbar-thumb { background:var(--bdr); border-radius:2px; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:none} }
+
+@keyframes pulseGreen { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,120,.3)} 60%{box-shadow:0 0 0 8px rgba(0,212,120,0)} }
+.pulse-g { animation:pulseGreen 2s ease infinite; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ HEADER ══════════════════════════════════════ -->
+<div id="hdr">
+  <div class="h-title">◈ NIFTY TRADER</div>
+  <div class="h-right">
+    <span class="c-txt" id="ctxt">Disconnected</span>
+    <div class="c-dot" id="cdot"></div>
+  </div>
+</div>
+
+<!-- ══ CONTENT ═════════════════════════════════════ -->
+<div id="content">
+
+  <!-- ┌─────────────────────────────────────────────┐
+       │  SETUP TAB                                  │
+       └─────────────────────────────────────────────┘ -->
+  <div class="tab on" id="t-setup">
+
+    <div class="sec">1 · Cloudflare Worker</div>
+    <div class="fld">
+      <label>Worker URL</label>
+      <input id="worker-url" type="url" placeholder="https://xxx.workers.dev" autocapitalize="none" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="info">
+      Deploy <code>cloudflare-worker.js</code> to <code>workers.cloudflare.com</code> (free, no expiry). Paste the generated <code>.workers.dev</code> URL above.
+    </div>
+
+    <div class="sec">2 · Upstox API Credentials</div>
+    <div class="fld">
+      <label>API Key (Client ID)</label>
+      <input id="api-key" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocapitalize="none" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="fld">
+      <label>API Secret (Client Secret)</label>
+      <input id="api-secret" type="password" autocomplete="off">
+    </div>
+    <div class="fld">
+      <label>Redirect URI — add this to your Upstox app's allowed redirect URIs</label>
+      <input id="redir-uri" type="text" readonly>
+    </div>
+
+    <div class="sec">3 · Authenticate</div>
+    <button class="btn btn-blue" id="btn-auth">Connect to Upstox →</button>
+    <div id="auth-msg" style="margin-top:10px;font-size:12px;color:var(--dim);text-align:center;min-height:18px"></div>
+
+    <hr>
+
+    <button class="btn btn-ghost" id="btn-save">Save Settings</button>
+    <button class="btn btn-danger" id="btn-clear">Clear All Saved Data</button>
+
+  </div>
+
+  <!-- ┌─────────────────────────────────────────────┐
+       │  STRATEGY TAB                               │
+       └─────────────────────────────────────────────┘ -->
+  <div class="tab" id="t-strategy">
+
+    <div class="sec">Execution Mode</div>
+    <div class="mrow">
+      <button class="mbtn on" id="m-semi" onclick="setMode('semi')">⚡ Semi-Auto</button>
+      <button class="mbtn"    id="m-auto" onclick="setMode('auto')">🤖 Full Auto</button>
+    </div>
+    <div class="info" id="mode-info">
+      <b>Semi-Auto:</b> At entry time the app identifies the strike and waits for your tap before placing the order.
+    </div>
+
+    <div class="sec">Today's Direction</div>
+    <div class="drow">
+      <div class="dbtn" id="d-ce" onclick="setDir('CE')">
+        BUY CE <small>📈 BULLISH</small>
+      </div>
+      <div class="dbtn" id="d-pe" onclick="setDir('PE')">
+        BUY PE <small>📉 BEARISH</small>
+      </div>
+    </div>
+
+    <div class="sec">Timing</div>
+    <div class="row2">
+      <div class="fld">
+        <label>Entry Time</label>
+        <input id="t-entry" type="time" step="1" value="09:42:45">
+      </div>
+      <div class="fld">
+        <label>Auto-Exit Time</label>
+        <input id="t-exit" type="time" step="1" value="10:15:00">
+      </div>
+    </div>
+
+    <div class="sec">Strike Selection</div>
+    <div class="row2">
+      <div class="fld">
+        <label>OTM Strikes Away</label>
+        <input id="otm" type="number" value="1" min="1" max="10">
+      </div>
+      <div class="fld">
+        <label>Strike Step (pts)</label>
+        <input id="step" type="number" value="50" min="25">
+      </div>
+    </div>
+
+    <div class="sec">Risk / Reward</div>
+    <div class="row2">
+      <div class="fld">
+        <label>Stop Loss (₹ pts)</label>
+        <input id="sl" type="number" value="30" min="1">
+      </div>
+      <div class="fld">
+        <label>Target (₹ pts)</label>
+        <input id="tgt" type="number" value="50" min="1">
+      </div>
+    </div>
+
+    <div class="sec">Lot Sizing</div>
+    <div class="mrow">
+      <button class="mbtn on" id="al-man" onclick="setAutoLots(false)">✋ Manual</button>
+      <button class="mbtn"    id="al-aut" onclick="setAutoLots(true)">💰 Auto from Balance</button>
+    </div>
+
+    <div class="row2">
+      <div class="fld">
+        <label id="lots-lbl">Lots</label>
+        <!-- manual: lots count -->
+        <input id="lots" type="number" value="1" min="1">
+        <!-- auto: deploy percentage -->
+        <input id="deploy-pct" type="number" value="90" min="10" max="100" style="display:none" placeholder="90">
+      </div>
+      <div class="fld">
+        <label>Lot Size (qty/lot)</label>
+        <input id="lotsize" type="number" value="65" min="1">
+      </div>
+    </div>
+    <div class="info" id="al-info" style="font-size:11px">
+      Manual: set number of lots directly. NIFTY lot size default is <code>65</code>.
+    </div>
+
+    <button class="btn btn-green" id="btn-arm" onclick="arm()">🔐 Arm Strategy</button>
+    <button class="btn btn-danger" id="btn-disarm" onclick="disarm()" style="display:none">✕ Disarm &amp; Reset</button>
+
+  </div>
+
+  <!-- ┌─────────────────────────────────────────────┐
+       │  MONITOR TAB                                │
+       └─────────────────────────────────────────────┘ -->
+  <div class="tab" id="t-monitor">
+
+    <!-- Status + Instrument row -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">STATUS</div>
+        <span class="badge b-idle" id="status-badge">IDLE</span>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">INSTRUMENT</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--blue)" id="instr-lbl">—</div>
+      </div>
+    </div>
+
+    <!-- Direction indicator row -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:8px 12px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r)">
+      <span style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase">Direction</span>
+      <span id="dir-ind" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--dim)">Not set</span>
+    </div>
+
+    <!-- Countdown -->
+    <div class="card">
+      <div class="ct-wrap">
+        <div class="ct-time" id="cdown">--:--:--</div>
+        <div class="ct-lbl"  id="cdown-lbl">NOT ARMED</div>
+      </div>
+    </div>
+
+    <!-- Price stats -->
+    <div class="sgrid">
+      <div class="sbox"><div class="sl">NIFTY Spot</div><div class="sv b" id="spot">—</div></div>
+      <div class="sbox"><div class="sl">Option LTP</div><div class="sv"   id="opt-ltp">—</div></div>
+      <div class="sbox"><div class="sl">Entry Price</div><div class="sv a" id="entry-px">—</div></div>
+      <div class="sbox"><div class="sl">P&amp;L</div><div class="sv d" id="pnl">—</div></div>
+    </div>
+
+    <!-- SL / Target card (shown after fill) -->
+    <div class="card" id="sltgt-card" style="display:none">
+      <div class="cr">
+        <span class="cr-l">Stop Loss at</span>
+        <span class="cr-v" style="color:var(--red)"   id="sl-level">—</span>
+      </div>
+      <div class="cr">
+        <span class="cr-l">Target at</span>
+        <span class="cr-v" style="color:var(--green)" id="tgt-level">—</span>
+      </div>
+      <div class="cr">
+        <span class="cr-l">Quantity</span>
+        <span class="cr-v" id="qty-lbl">—</span>
+      </div>
+    </div>
+
+    <!-- Fire Now: visible when armed and waiting for entry time -->
+    <div id="area-fire" style="display:none">
+      <button class="btn btn-amber" onclick="fireNow()">⚡ FIRE ENTRY NOW</button>
+    </div>
+
+    <!-- Direction prompt: visible when entry time hit but no direction set -->
+    <div id="area-dir" style="display:none">
+      <div style="text-align:center;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;letter-spacing:.03em">
+        ⚡ ENTRY TIME — PICK DIRECTION NOW
+      </div>
+      <div class="drow" style="margin-bottom:0">
+        <div class="dbtn" onclick="pickDirMonitor('CE')">BUY CE <small>📈 BULLISH</small></div>
+        <div class="dbtn" onclick="pickDirMonitor('PE')">BUY PE <small>📉 BEARISH</small></div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div id="area-confirm" style="display:none">
+      <button class="btn btn-green pulse-g" id="btn-confirm" onclick="confirmTrade()">✅ CONFIRM TRADE</button>
+    </div>
+    <div id="area-sqoff" style="display:none">
+      <button class="btn btn-red" id="btn-sqoff" onclick="manualSqOff()">🛑 SQUARE OFF NOW</button>
+    </div>
+    <div id="area-goto">
+      <button class="btn btn-ghost btn-sm" onclick="go('strategy')">← Go to Strategy to arm</button>
+    </div>
+
+  </div>
+
+  <!-- ┌─────────────────────────────────────────────┐
+       │  LOG TAB                                    │
+       └─────────────────────────────────────────────┘ -->
+  <div class="tab" id="t-log">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em">Event Log</div>
+      <button onclick="clearLog()" style="font-size:11px;color:var(--dim);background:none;border:none;cursor:pointer;padding:4px">Clear</button>
+    </div>
+    <div id="log-list">
+      <div style="font-size:12px;color:var(--dim);text-align:center;padding:28px">No events yet</div>
+    </div>
+  </div>
+
+</div><!-- /#content -->
+
+<!-- ══ BOTTOM NAV ════════════════════════════════════ -->
+<div id="nav">
+  <button class="nb on" id="nav-setup"    onclick="go('setup')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+    Setup
+  </button>
+  <button class="nb" id="nav-strategy" onclick="go('strategy')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    Strategy
+  </button>
+  <button class="nb" id="nav-monitor"  onclick="go('monitor')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Monitor
+  </button>
+  <button class="nb" id="nav-log"      onclick="go('log')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    Log
+  </button>
+</div>
+
+</div><!-- /#app -->
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════ */
+const ST = {
+  // Setup
+  workerUrl:   '',
+  apiKey:      '',
+  apiSecret:   '',
+  accessToken: '',
+
+  // Strategy config
+  mode:      'semi',
+  dir:       null,         // 'CE' | 'PE'
+  entryTime: '09:42:45',
+  exitTime:  '10:15:00',
+  otm:       1,
+  step:      50,
+  sl:        30,
+  tgt:       50,
+  lots:      1,
+  lotSize:   65,
+  autoLots:  false,   // auto-calculate lots from available balance
+  deployPct: 90,      // % of available funds to deploy
+
+  // Runtime
+  armed:        false,
+  status:       'idle',
+  instr:        null,      // { key, strike, type, expiry }
+  entryPrice:   null,
+  slLevel:      null,
+  tgtLevel:     null,
+  spotPrice:    null,
+  optionPrice:  null,
+  entryOrderId: null,
+  exitOrderId:  null,
+
+  // Timer handles
+  _entryTimer:    null,
+  _exitTimer:     null,
+  _dirTimeout:    null,   // timeout when waiting for direction at entry time
+  _monitorIvl:    null,
+  _spotIvl:       null,
+
+  // Log
+  events: []
+};
+
+/* ════════════════════════════════════════════════════
+   PERSISTENCE
+════════════════════════════════════════════════════ */
+function persist() {
+  const d = {
+    workerUrl: ST.workerUrl, apiKey: ST.apiKey, apiSecret: ST.apiSecret,
+    accessToken: ST.accessToken, mode: ST.mode, dir: ST.dir,
+    entryTime: ST.entryTime, exitTime: ST.exitTime,
+    otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
+    lots: ST.lots, lotSize: ST.lotSize,
+    autoLots: ST.autoLots, deployPct: ST.deployPct,
+    events: ST.events.slice(0, 120)
+  };
+  localStorage.setItem('nt3', JSON.stringify(d));
+}
+
+function restore() {
+  try { Object.assign(ST, JSON.parse(localStorage.getItem('nt3') || '{}')); } catch(_) {}
+}
+
+/* ════════════════════════════════════════════════════
+   API LAYER — all calls via Cloudflare Worker
+════════════════════════════════════════════════════ */
+async function upstox(path, method = 'GET', body = null, ct = 'application/json') {
+  if (!ST.workerUrl) throw new Error('Worker URL not configured');
+  const url = ST.workerUrl.replace(/\/$/, '') + path;
+  const headers = { 'Accept': 'application/json', 'Api-Version': '2.0' };
+  if (ST.accessToken) headers['Authorization'] = `Bearer ${ST.accessToken}`;
+  if (body) headers['Content-Type'] = ct;
+  const opts = { method, headers };
+  if (body) opts.body = ct === 'application/json' ? JSON.stringify(body) : body;
+  const res  = await fetch(url, opts);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = json?.errors?.[0]?.message || json?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return json;
+}
+
+/* ════════════════════════════════════════════════════
+   OAUTH 2.0
+════════════════════════════════════════════════════ */
+function doAuth() {
+  const wu = q('worker-url').value.trim();
+  const ak = q('api-key').value.trim();
+  const as = q('api-secret').value.trim();
+  if (!wu || !ak || !as) { alert('Fill in Worker URL, API Key, and API Secret first.'); return; }
+  ST.workerUrl = wu; ST.apiKey = ak; ST.apiSecret = as;
+  persist();
+  const redir   = baseUrl();
+  const authUrl = `https://api.upstox.com/v2/login/authorization/dialog` +
+                  `?response_type=code&client_id=${encodeURIComponent(ak)}&redirect_uri=${encodeURIComponent(redir)}`;
+  lg('Opening Upstox login…', 'i');
+  location.href = authUrl;
+}
+
+async function exchangeCode(code) {
+  lg('Received auth code, exchanging for token…', 'i');
+  authMsg('Exchanging code…');
+  const base = ST.workerUrl.replace(/\/$/, '');
+  const body = new URLSearchParams({
+    code, client_id: ST.apiKey, client_secret: ST.apiSecret,
+    redirect_uri: baseUrl(), grant_type: 'authorization_code'
+  }).toString();
+  try {
+    const res  = await fetch(base + '/v2/login/authorization/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'Api-Version': '2.0' },
+      body
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d?.message || 'Token exchange failed');
+    ST.accessToken = d.access_token;
+    persist();
+    setConn(true);
+    authMsg('✅ Authenticated successfully');
+    lg('✅ Upstox connected', 's');
+  } catch(e) {
+    authMsg('❌ ' + e.message);
+    lg('Auth error: ' + e.message, 'e');
+    setConn(false);
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   MARKET DATA
+════════════════════════════════════════════════════ */
+async function getNiftySpot() {
+  // instrument_key: NSE_INDEX|Nifty 50 (pipe + space, URL-encoded)
+  const d = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+  const ltp = Object.values(d?.data || {})[0]?.last_price;
+  if (!ltp) throw new Error('NIFTY spot price unavailable');
+  return parseFloat(ltp);
+}
+
+async function getOptLTP(instrKey) {
+  const d = await upstox(`/v2/market-quote/ltp?instrument_key=${encodeURIComponent(instrKey)}`);
+  return parseFloat(Object.values(d?.data || {})[0]?.last_price) || 0;
+}
+
+function calcExpiry() {
+  // NIFTY weekly expiry = Thursday
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun … 4=Thu … 6=Sat
+  const isThuBeforeClose = day === 4 &&
+    (now.getHours() * 60 + now.getMinutes()) < 15 * 60 + 30;
+  if (isThuBeforeClose) return now.toISOString().split('T')[0];
+  const skip = (4 - day + 7) % 7 || 7;
+  const d = new Date(now);
+  d.setDate(now.getDate() + skip);
+  return d.toISOString().split('T')[0];
+}
+
+async function findInstrument(expiry, strike, type) {
+  const key = encodeURIComponent('NSE_INDEX|Nifty 50');
+  const d   = await upstox(`/v2/option/chain?instrument_key=${key}&expiry_date=${expiry}`);
+  const chain = d?.data;
+  if (!Array.isArray(chain) || !chain.length) throw new Error('Option chain empty for ' + expiry);
+
+  const row = chain.find(r => Math.round(r.strike_price) === strike);
+  if (!row) {
+    const nearby = chain
+      .map(r => r.strike_price)
+      .filter(s => Math.abs(s - strike) <= ST.step * 3)
+      .join(', ');
+    throw new Error(`Strike ${strike} not in chain. Nearby: ${nearby}`);
+  }
+  const side = type === 'CE' ? row.call_options : row.put_options;
+  if (!side?.instrument_key) throw new Error(`${type} key missing for ${strike}`);
+  return { key: side.instrument_key, ltp: parseFloat(side?.market_data?.ltp) || 0 };
+}
+
+/* ════════════════════════════════════════════════════
+   BALANCE — for auto-lots calculation
+════════════════════════════════════════════════════ */
+async function getAvailableFunds() {
+  // GET /v2/user/fund-and-margin?segment=SEC
+  // Returns available margin for NSE equity/F&O segment
+  const d = await upstox('/v2/user/fund-and-margin?segment=SEC');
+  const eq = d?.data?.equity;
+  if (!eq) throw new Error('No equity segment in fund response');
+  // Try known field names in order of preference
+  const funds = parseFloat(
+    eq.available_margin ?? eq.available_cash ?? eq.net ?? 0
+  );
+  if (!funds || isNaN(funds) || funds <= 0)
+    throw new Error('Available margin is zero or unreadable');
+  return funds;
+}
+
+/* ════════════════════════════════════════════════════
+   AUTO-LOTS TOGGLE
+════════════════════════════════════════════════════ */
+function setAutoLots(v) {
+  ST.autoLots = v;
+  q('al-man').classList.toggle('on', !v);
+  q('al-aut').classList.toggle('on',  v);
+
+  // Swap the left-cell input and its label
+  q('lots-lbl').textContent  = v ? 'Deploy % of funds' : 'Lots';
+  q('lots').style.display       = v ? 'none' : '';
+  q('deploy-pct').style.display = v ? '' : 'none';
+
+  q('al-info').innerHTML = v
+    ? '💰 At entry time: lots = ⌊(balance × deploy%) ÷ (option LTP × lot size)⌋. Minimum 1 lot.'
+    : 'Manual: set lot count directly. NIFTY lot size default is <code>65</code>.';
+
+  persist();
+}
+async function placeMarket(instrKey, txn, qty) {
+  // txn: 'BUY' | 'SELL'
+  const body = {
+    quantity:           qty,
+    product:            'I',           // Intraday MIS
+    validity:           'DAY',
+    price:              0,
+    tag:                'nifty_trader',
+    instrument_token:   instrKey,      // Upstox v2 field name
+    order_type:         'MARKET',
+    transaction_type:   txn,
+    disclosed_quantity: 0,
+    trigger_price:      0,
+    is_amo:             false
+  };
+  const d = await upstox('/v2/order/place', 'POST', body);
+  const id = d?.data?.order_id;
+  if (!id) throw new Error('No order_id returned');
+  return id;
+}
+
+async function waitFill(orderId, retries = 15) {
+  // Poll up to 45 s for market order fill
+  for (let i = 0; i < retries; i++) {
+    await sleep(3000);
+    try {
+      const d = await upstox(`/v2/order/details?order_id=${orderId}`);
+      const o = d?.data;
+      lg(`Order ${orderId}: ${o?.status}`, 'i');
+      if (o?.status === 'complete') return parseFloat(o.average_price) || 0;
+      if (['rejected', 'cancelled'].includes(o?.status))
+        throw new Error(`Order ${o.status}: ${o.status_message || ''}`);
+    } catch(e) {
+      if (i === retries - 1) throw e;
+    }
+  }
+  throw new Error('Order not filled in 45s — check Upstox');
+}
+
+/* ════════════════════════════════════════════════════
+   STRATEGY ENGINE
+════════════════════════════════════════════════════ */
+function arm() {
+  if (!ST.accessToken) { alert('Authenticate with Upstox first (Setup tab)'); return; }
+
+  // Direction not required to arm — can pick on Monitor at entry time
+  ST.entryTime = q('t-entry').value;
+  ST.exitTime  = q('t-exit').value;
+  ST.otm       = parseInt(q('otm').value);
+  ST.step      = parseInt(q('step').value);
+  ST.sl        = parseFloat(q('sl').value);
+  ST.tgt       = parseFloat(q('tgt').value);
+  ST.lots      = ST.autoLots ? ST.lots : parseInt(q('lots').value);
+  ST.deployPct = parseInt(q('deploy-pct').value) || 90;
+  ST.lotSize   = parseInt(q('lotsize').value);
+  persist();
+
+  const msEntry = msTo(ST.entryTime);
+  if (msEntry < 0) { alert(`Entry time ${ST.entryTime} has already passed today.`); return; }
+
+  // Clear any old timers
+  clearAllTimers();
+
+  ST.armed = true;
+  setStatus('armed');
+
+  ST._entryTimer = setTimeout(onEntryTime, msEntry);
+  lg(`⏱ Entry scheduled at ${ST.entryTime} (${fmtMs(msEntry)} away)`, 'i');
+
+  const msExit = msTo(ST.exitTime);
+  if (msExit > 0) {
+    ST._exitTimer = setTimeout(onExitTime, msExit);
+    lg(`⏱ Auto-exit scheduled at ${ST.exitTime}`, 'i');
+  }
+
+  startSpotRefresh();
+  if (!ST.dir) {
+    lg('⚠️ No direction set — pick CE/PE on Monitor tab before entry time', 'w');
+  }
+  const dirStr = ST.dir || 'TBD';
+  lg(`✅ Armed — ${dirStr} OTM+${ST.otm}, SL ₹${ST.sl}, TGT ₹${ST.tgt}, ${ST.lots}×${ST.lotSize}`, 's');
+
+  q('btn-arm').style.display    = 'none';
+  q('btn-disarm').style.display = 'block';
+
+  go('monitor');
+}
+
+function disarm() {
+  if (!confirm('Disarm strategy and reset trade state?')) return;
+  clearAllTimers();
+  Object.assign(ST, {
+    armed: false, status: 'idle', instr: null,
+    entryPrice: null, slLevel: null, tgtLevel: null,
+    entryOrderId: null, exitOrderId: null,
+    spotPrice: null, optionPrice: null
+  });
+  setStatus('idle');
+  showConfirm(false); showSqOff(false);
+  q('sltgt-card').style.display = 'none';
+  q('btn-arm').style.display    = 'block';
+  q('btn-disarm').style.display = 'none';
+  q('instr-lbl').textContent = '—';
+  q('entry-px').textContent = '—';
+  q('opt-ltp').textContent  = '—';
+  const ind = q('dir-ind'); ind.textContent = 'Not set'; ind.style.color = 'var(--dim)';
+  setPnL(null, null);
+  lg('Strategy disarmed', 'w');
+  persist();
+}
+
+/* ── Fire Now: manual entry override ─────────────── */
+function fireNow() {
+  if (ST.status !== 'armed') return;
+  clearTimeout(ST._entryTimer); // cancel the scheduled timer — won't double-fire
+  lg('⚡ Fire Now tapped — triggering entry immediately', 'i');
+  onEntryTime();
+}
+
+/* ── Pick direction from Monitor tab ────────────── */
+function pickDirMonitor(dir) {
+  clearTimeout(ST._dirTimeout);
+  setDir(dir);
+  lg(`Direction set: ${dir}`, 'i');
+  // Resume entry from where we paused
+  ST.status = 'armed'; // reset so onEntryTime guard passes
+  onEntryTime();
+}
+
+/* ── Entry sequence ─────────────────────────────── */
+async function onEntryTime() {
+  if (!ST.armed || !['armed', 'choose_dir'].includes(ST.status)) return;
+
+  // If no direction selected yet, pause and show the Monitor prompt
+  if (!ST.dir) {
+    setStatus('choose_dir');
+    beep(660, 0.4);
+    notify('Pick Direction!', 'CE or PE — tap on Monitor tab');
+    lg('⚠️ Entry time reached but no direction set. Pick CE or PE within 2 min.', 'w');
+    clearTimeout(ST._dirTimeout);
+    ST._dirTimeout = setTimeout(() => {
+      if (ST.status === 'choose_dir') {
+        lg('⏰ No direction picked within 2 min — entry cancelled', 'e');
+        setStatus('armed'); // go back to armed so user can re-trigger
+      }
+    }, 120000);
+    return; // wait for pickDirMonitor() to call us again
+  }
+
+  lg('🚀 Entry triggered — fetching market data…', 'i');
+  setStatus('ready');
+
+  try {
+    const spot = await getNiftySpot();
+    ST.spotPrice = spot;
+    q('spot').textContent = spot.toFixed(2);
+
+    const atm    = Math.round(spot / ST.step) * ST.step;
+    const strike = ST.dir === 'CE' ? atm + ST.otm * ST.step : atm - ST.otm * ST.step;
+    const expiry = calcExpiry();
+
+    lg(`Spot: ${spot.toFixed(2)}, ATM: ${atm}, Strike: ${strike}${ST.dir}, Expiry: ${expiry}`, 'i');
+
+    const { key, ltp } = await findInstrument(expiry, strike, ST.dir);
+    ST.instr = { key, strike, type: ST.dir, expiry };
+
+    q('instr-lbl').textContent = `${strike}${ST.dir} ${expiry}`;
+    q('opt-ltp').textContent   = `₹${ltp.toFixed(2)}`;
+    ST.optionPrice = ltp;
+
+    // ── Auto-lots: calculate from available balance ──────────────
+    if (ST.autoLots) {
+      try {
+        lg('💰 Fetching available balance…', 'i');
+        const funds     = await getAvailableFunds();
+        const deployAmt = funds * ST.deployPct / 100;
+        const costPerLot = ltp * ST.lotSize;
+        if (costPerLot <= 0) throw new Error('Option LTP is 0 — cannot size');
+        const calcLots  = Math.max(1, Math.floor(deployAmt / costPerLot));
+        ST.lots = calcLots;
+        lg(`💰 Balance: ₹${funds.toFixed(0)} | Deploy ${ST.deployPct}%: ₹${deployAmt.toFixed(0)} | ` +
+           `Cost/lot: ₹${costPerLot.toFixed(0)} (${ltp}×${ST.lotSize}) | → ${calcLots} lot${calcLots > 1 ? 's' : ''}`, 's');
+      } catch(e) {
+        lg(`⚠️ Auto-lots failed: ${e.message}. Using last manual value: ${ST.lots} lot${ST.lots > 1 ? 's' : ''}`, 'w');
+      }
+    }
+
+    if (ST.mode === 'auto') {
+      await doEntry();
+    } else {
+      setStatus('confirm');
+      showConfirm(true);
+      lg(`⚡ Ready: ${strike}${ST.dir} LTP ₹${ltp} — tap CONFIRM to place order`, 'w');
+      beep(880, 0.5);
+      notify('Trade Ready', `${strike}${ST.dir} @ ₹${ltp} — tap to confirm`);
+    }
+  } catch(e) {
+    lg(`❌ Entry error: ${e.message}`, 'e');
+    setStatus('armed');
+  }
+}
+
+async function doEntry() {
+  const qty = ST.lots * ST.lotSize;
+  setStatus('placed');
+  showConfirm(false);
+  showSqOff(true);
+
+  try {
+    lg(`📤 BUY MARKET — ${ST.instr.strike}${ST.instr.type} × ${qty}`, 'i');
+    const orderId = await placeMarket(ST.instr.key, 'BUY', qty);
+    ST.entryOrderId = orderId;
+    lg(`✅ Order placed: ${orderId}. Waiting for fill…`, 's');
+
+    const fillPx = await waitFill(orderId);
+    ST.entryPrice = fillPx;
+    ST.slLevel    = fillPx - ST.sl;
+    ST.tgtLevel   = fillPx + ST.tgt;
+
+    q('entry-px').textContent  = fillPx.toFixed(2);
+    q('sl-level').textContent  = `₹${ST.slLevel.toFixed(2)}`;
+    q('tgt-level').textContent = `₹${ST.tgtLevel.toFixed(2)}`;
+    q('qty-lbl').textContent   = `${qty} (${ST.lots} lot${ST.lots > 1 ? 's' : ''})`;
+    q('sltgt-card').style.display = 'block';
+
+    setStatus('live');
+    startMonitor();
+    lg(`✅ Filled @ ₹${fillPx} | SL: ₹${ST.slLevel.toFixed(2)} | TGT: ₹${ST.tgtLevel.toFixed(2)}`, 's');
+    beep(660, 0.6);
+    notify('Trade Active 🟢', `Filled @ ₹${fillPx}`);
+    persist();
+
+  } catch(e) {
+    lg(`❌ Order failed: ${e.message}`, 'e');
+    setStatus('ready');
+    if (ST.mode === 'semi') showConfirm(true);
+    showSqOff(false);
+  }
+}
+
+/* ── Exit sequence ──────────────────────────────── */
+async function onExitTime() {
+  if (ST.status !== 'live') return;
+  lg('⏰ Auto-exit time reached', 'w');
+  await doSquareOff('Auto-exit');
+}
+
+async function doSquareOff(reason) {
+  if (!ST.instr) { lg('No open position to square off', 'w'); return; }
+  stopMonitor();
+  setStatus('exit');
+  showSqOff(false);
+
+  const qty = ST.lots * ST.lotSize;
+  try {
+    lg(`📤 Square off (${reason}) — SELL ${qty}`, 'i');
+    const orderId = await placeMarket(ST.instr.key, 'SELL', qty);
+    ST.exitOrderId = orderId;
+    lg(`✅ Square off placed: ${orderId}`, 's');
+    setStatus('done');
+    ST.armed = false;
+
+    const estPnl = ST.entryPrice ? ((ST.optionPrice || ST.entryPrice) - ST.entryPrice) * qty : 0;
+    const sign   = estPnl >= 0 ? '+' : '';
+    lg(`🏁 Trade closed. Est P&L: ${sign}₹${estPnl.toFixed(0)}`, estPnl >= 0 ? 's' : 'e');
+    beep(estPnl >= 0 ? 880 : 300, 0.8);
+    notify('Trade Closed', `Est P&L: ${sign}₹${estPnl.toFixed(0)}`);
+
+    q('btn-arm').style.display    = 'block';
+    q('btn-disarm').style.display = 'none';
+    persist();
+
+  } catch(e) {
+    lg(`❌ Square off FAILED: ${e.message}`, 'e');
+    lg('⚠️  Manually square off in Upstox NOW!', 'e');
+    setStatus('live');
+    showSqOff(true);
+    startMonitor();
+  }
+}
+
+function confirmTrade() { doEntry(); }
+function manualSqOff()  { if (confirm('Square off position now?')) doSquareOff('Manual'); }
+
+/* ════════════════════════════════════════════════════
+   MONITORING LOOP
+════════════════════════════════════════════════════ */
+function startMonitor() {
+  stopMonitor();
+  ST._monitorIvl = setInterval(monitorTick, 5000);
+  monitorTick();
+}
+
+function stopMonitor() {
+  clearInterval(ST._monitorIvl);
+  ST._monitorIvl = null;
+}
+
+async function monitorTick() {
+  if (ST.status !== 'live') { stopMonitor(); return; }
+  try {
+    const [spot, optLTP] = await Promise.all([getNiftySpot(), getOptLTP(ST.instr.key)]);
+    ST.spotPrice   = spot;
+    ST.optionPrice = optLTP;
+    q('spot').textContent   = spot.toFixed(2);
+    q('opt-ltp').textContent = `₹${optLTP.toFixed(2)}`;
+    setPnL(ST.entryPrice, optLTP);
+
+    if (ST.entryPrice !== null) {
+      if (optLTP <= ST.slLevel) {
+        lg(`🛑 SL HIT — option ₹${optLTP} ≤ SL ₹${ST.slLevel.toFixed(2)}`, 'e');
+        notify('Stop Loss Hit 🛑', `Option ₹${optLTP}`);
+        if (ST.mode === 'auto') { await doSquareOff('SL hit'); }
+        else { beep(220, 1.5); lg('Semi-auto: tap Square Off to exit', 'w'); }
+      } else if (optLTP >= ST.tgtLevel) {
+        lg(`🎯 TARGET HIT — option ₹${optLTP} ≥ TGT ₹${ST.tgtLevel.toFixed(2)}`, 's');
+        notify('Target Hit 🎯', `Option ₹${optLTP}`);
+        if (ST.mode === 'auto') { await doSquareOff('Target hit'); }
+        else { beep(1047, 0.8); lg('Semi-auto: tap Square Off to exit', 'w'); }
+      }
+    }
+  } catch(e) {
+    lg(`Monitor: ${e.message}`, 'w');
+  }
+}
+
+function startSpotRefresh() {
+  stopSpotRefresh();
+  ST._spotIvl = setInterval(async () => {
+    if (!ST.accessToken || !ST.workerUrl) return;
+    if (ST.status === 'live') return; // monitor handles it
+    try {
+      const s = await getNiftySpot();
+      ST.spotPrice = s;
+      q('spot').textContent = s.toFixed(2);
+    } catch(_) {}
+  }, 10000);
+}
+
+function stopSpotRefresh() { clearInterval(ST._spotIvl); ST._spotIvl = null; }
+function clearAllTimers() {
+  clearTimeout(ST._entryTimer); clearTimeout(ST._exitTimer);
+  clearTimeout(ST._dirTimeout);
+  stopMonitor(); stopSpotRefresh();
+}
+
+/* ════════════════════════════════════════════════════
+   COUNTDOWN TICKER (1-second interval)
+════════════════════════════════════════════════════ */
+setInterval(() => {
+  const el = q('cdown'), lbl = q('cdown-lbl');
+  if (!ST.armed) { el.textContent = '--:--:--'; lbl.textContent = 'NOT ARMED'; return; }
+
+  let target, label;
+  if (['armed', 'ready', 'confirm'].includes(ST.status)) {
+    target = ST.entryTime; label = 'UNTIL ENTRY';
+  } else if (ST.status === 'live') {
+    target = ST.exitTime; label = 'UNTIL AUTO-EXIT';
+  } else {
+    el.textContent = '--:--:--';
+    lbl.textContent = ST.status.toUpperCase();
+    return;
+  }
+  const ms = msTo(target);
+  el.textContent  = fmtMs(ms);
+  lbl.textContent = label;
+}, 1000);
+
+/* ════════════════════════════════════════════════════
+   UI HELPERS
+════════════════════════════════════════════════════ */
+function go(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
+  q('t-' + tab).classList.add('on');
+  q('nav-' + tab).classList.add('on');
+}
+
+function setMode(m) {
+  ST.mode = m;
+  q('m-semi').classList.toggle('on', m === 'semi');
+  q('m-auto').classList.toggle('on', m === 'auto');
+  q('mode-info').innerHTML = m === 'semi'
+    ? '<b>Semi-Auto:</b> At entry time the app identifies the strike and waits for your tap before placing the order.'
+    : '<b>Full Auto:</b> Order is placed automatically at entry time. No confirmation needed.';
+  persist();
+}
+
+function setDir(d) {
+  ST.dir = d;
+  q('d-ce').className = 'dbtn' + (d === 'CE' ? ' ce' : '');
+  q('d-pe').className = 'dbtn' + (d === 'PE' ? ' pe' : '');
+  // Update monitor direction badge
+  const ind = q('dir-ind');
+  if (d === 'CE') { ind.textContent = '📈 BUY CE'; ind.style.color = 'var(--green)'; }
+  else            { ind.textContent = '📉 BUY PE'; ind.style.color = 'var(--red)'; }
+  persist();
+}
+
+const STATUS_CFG = {
+  idle:       ['b-idle',    'IDLE',               false],
+  armed:      ['b-armed',   'ARMED ▸ WAITING',    false],
+  choose_dir: ['b-ready',   'PICK DIRECTION ⚡',  true ],
+  ready:      ['b-ready',   'SIGNAL READY',       false],
+  confirm:    ['b-confirm', 'AWAITING CONFIRM',   false],
+  placed:     ['b-placed',  'ORDER PLACED',       false],
+  live:       ['b-live',    'IN TRADE ●',         true ],
+  exit:       ['b-exit',    'EXITING…',           true ],
+  done:       ['b-done',    'COMPLETE',           false],
+};
+
+function setStatus(s) {
+  ST.status = s;
+  const [cls, lbl, bl] = STATUS_CFG[s] || ['b-idle', s.toUpperCase(), false];
+  const el = q('status-badge');
+  el.className  = 'badge ' + cls + (bl ? ' blink' : '');
+  el.textContent = lbl;
+  q('area-goto').style.display  = ['idle', 'done'].includes(s) ? 'block' : 'none';
+  q('area-fire').style.display  = s === 'armed'      ? 'block' : 'none';
+  q('area-dir').style.display   = s === 'choose_dir' ? 'block' : 'none';
+}
+
+function setConn(ok) {
+  q('cdot').className   = 'c-dot ' + (ok ? 'live' : '');
+  q('ctxt').textContent = ok ? 'Connected' : 'Disconnected';
+}
+
+function showConfirm(v) { q('area-confirm').style.display = v ? 'block' : 'none'; }
+function showSqOff(v)   { q('area-sqoff').style.display   = v ? 'block' : 'none'; }
+
+function setPnL(entryPx, curPx) {
+  const el = q('pnl');
+  if (entryPx === null || curPx === null) {
+    el.textContent = '—'; el.className = 'sv d'; return;
+  }
+  const pnl = (curPx - entryPx) * ST.lots * ST.lotSize;
+  el.textContent = (pnl >= 0 ? '+₹' : '-₹') + Math.abs(pnl).toFixed(0);
+  el.className   = 'sv ' + (pnl >= 0 ? 'g' : 'r');
+}
+
+function authMsg(t) { q('auth-msg').textContent = t; }
+
+/* ════════════════════════════════════════════════════
+   LOG
+════════════════════════════════════════════════════ */
+function lg(msg, type = 'i') {
+  const t = new Date().toTimeString().slice(0, 8);
+  ST.events.unshift({ t, msg, type });
+  if (ST.events.length > 200) ST.events.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const el = q('log-list');
+  if (!ST.events.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--dim);text-align:center;padding:28px">No events yet</div>';
+    return;
+  }
+  el.innerHTML = ST.events.slice(0, 100).map(e =>
+    `<div class="li ${e.type}"><span class="lt">${e.t}</span><span>${e.msg}</span></div>`
+  ).join('');
+}
+
+function clearLog() { ST.events = []; renderLog(); persist(); }
+
+/* ════════════════════════════════════════════════════
+   NOTIFICATIONS + AUDIO
+════════════════════════════════════════════════════ */
+function notify(title, body) {
+  if (Notification?.permission === 'granted') {
+    try { new Notification(title, { body }); } catch(_) {}
+  }
+}
+
+function beep(freq, dur) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.25, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  } catch(_) {}
+}
+
+/* ════════════════════════════════════════════════════
+   UTILITIES
+════════════════════════════════════════════════════ */
+const q = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const baseUrl = () => location.href.split('?')[0].split('#')[0];
+
+function msTo(timeStr) {
+  const [h, m, s] = timeStr.split(':').map(Number);
+  const t = new Date(); t.setHours(h, m, s || 0, 0);
+  return t - new Date();
+}
+
+function fmtMs(ms) {
+  const tot = Math.floor(Math.max(ms, 0) / 1000);
+  return [Math.floor(tot / 3600), Math.floor((tot % 3600) / 60), tot % 60]
+    .map(v => String(v).padStart(2, '0')).join(':');
+}
+
+/* ════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════ */
+function init() {
+  restore();
+
+  // Populate setup fields
+  q('redir-uri').value   = baseUrl();
+  q('worker-url').value  = ST.workerUrl;
+  q('api-key').value     = ST.apiKey;
+  q('api-secret').value  = ST.apiSecret;
+
+  // Populate strategy fields
+  q('t-entry').value = ST.entryTime;
+  q('t-exit').value  = ST.exitTime;
+  q('otm').value     = ST.otm;
+  q('step').value    = ST.step;
+  q('sl').value      = ST.sl;
+  q('tgt').value     = ST.tgt;
+  q('lots').value       = ST.lots;
+  q('lotsize').value    = ST.lotSize;
+  q('deploy-pct').value = ST.deployPct;
+
+  // Restore UI state
+  setMode(ST.mode);
+  if (ST.dir) setDir(ST.dir); // also updates dir-ind badge in Monitor
+  if (ST.autoLots) setAutoLots(true);  // restore toggle; default (false) needs no action
+  setStatus('idle'); // always start clean — don't resume mid-trade after reload
+  if (ST.accessToken) setConn(true);
+
+  renderLog();
+
+  // Button listeners
+  q('btn-auth').onclick  = doAuth;
+  q('btn-save').onclick  = () => {
+    ST.workerUrl = q('worker-url').value.trim();
+    ST.apiKey    = q('api-key').value.trim();
+    ST.apiSecret = q('api-secret').value.trim();
+    persist();
+    authMsg('✓ Settings saved');
+    setTimeout(() => authMsg(''), 2000);
+  };
+  q('btn-clear').onclick = () => {
+    if (confirm('Clear all saved data including Upstox token?')) {
+      localStorage.removeItem('nt3');
+      location.reload();
+    }
+  };
+
+  // Handle OAuth callback (code in URL)
+  const code = new URLSearchParams(location.search).get('code');
+  if (code) {
+    history.replaceState({}, '', baseUrl());
+    exchangeCode(code);
+    go('setup');
+  }
+
+  // Request push notification permission
+  if (Notification?.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  lg('NIFTY Trader v2 started', 'i');
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
