@@ -269,6 +269,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div class="h-title">◈ NIFTY TRADER</div>
   <div class="h-right">
+    <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
     <span class="c-txt" id="ctxt">Disconnected</span>
     <div class="c-dot" id="cdot"></div>
   </div>
@@ -824,6 +825,7 @@ function arm() {
   }
 
   startSpotRefresh();
+  requestWakeLock();
   if (!ST.dir) {
     lg('⚠️ No direction set — pick CE/PE on Monitor tab before entry time', 'w');
   }
@@ -856,6 +858,7 @@ function disarm() {
   const ind = q('dir-ind'); ind.textContent = 'Not set'; ind.style.color = 'var(--dim)';
   setPnL(null, null);
   lg('Strategy disarmed', 'w');
+  releaseWakeLock();
   persist();
 }
 
@@ -1009,6 +1012,7 @@ async function doSquareOff(reason) {
     lg(`✅ Square off placed: ${orderId}`, 's');
     setStatus('done');
     ST.armed = false;
+    releaseWakeLock();
 
     const estPnl = ST.entryPrice ? ((ST.optionPrice || ST.entryPrice) - ST.entryPrice) * qty : 0;
     const sign   = estPnl >= 0 ? '+' : '';
@@ -1254,6 +1258,43 @@ function fmtMs(ms) {
   return [Math.floor(tot / 3600), Math.floor((tot % 3600) / 60), tot % 60]
     .map(v => String(v).padStart(2, '0')).join(':');
 }
+
+/* ════════════════════════════════════════════════════
+   WAKE LOCK — keeps screen on while armed / in trade
+════════════════════════════════════════════════════ */
+let _wakeLock = null;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) {
+    lg('⚠️ Wake Lock not supported on this browser — keep screen on manually', 'w');
+    return;
+  }
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', () => {
+      q('wl-ind').style.display = 'none';
+    });
+    q('wl-ind').style.display = 'inline';
+    lg('🔆 Screen wake lock on — screen will stay awake', 's');
+  } catch(e) {
+    lg('⚠️ Wake lock failed: ' + e.message + ' — keep screen on manually', 'w');
+  }
+}
+
+function releaseWakeLock() {
+  if (_wakeLock) {
+    _wakeLock.release();
+    _wakeLock = null;
+  }
+  q('wl-ind').style.display = 'none';
+}
+
+// Re-acquire wake lock if page becomes visible again while armed
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && ST.armed && !_wakeLock) {
+    await requestWakeLock();
+  }
+});
 
 /* ════════════════════════════════════════════════════
    INIT
