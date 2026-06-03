@@ -915,8 +915,8 @@ function armAndEnterNow() {
   if (!ST.accessToken) { alert('Authenticate first (Setup tab)'); return; }
   if (!ST.dir)         { alert('Select CE or PE direction first'); return; }
 
-  // Capture current time as entry
-  const now = new Date();
+  // Capture current time + 4s buffer so arm() doesn't see it as already passed
+  const now = new Date(Date.now() + 4000);
   const entryTime = now.toTimeString().slice(0, 8);
   q('t-entry').value = entryTime;
 
