@@ -438,6 +438,11 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
        └─────────────────────────────────────────────┘ -->
   <div class="tab" id="t-monitor">
 
+    <!-- Active proxy indicator -->
+    <div style="text-align:center;margin-bottom:10px;font-family:var(--mono);font-size:10px;color:var(--dim)">
+      PROXY: <span id="proxy-ind" style="color:var(--blue)">—</span>
+    </div>
+
     <!-- Status + Instrument row -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
@@ -667,6 +672,7 @@ function doAuth() {
   if (!wu || !ak || !as) { alert('Fill in Worker URL, API Key, and API Secret first.'); return; }
   ST.workerUrl = wu; ST.apiKey = ak; ST.apiSecret = as;
   persist();
+  updateProxyIndicator();
   const redir   = baseUrl();
   const authUrl = `https://api.upstox.com/v2/login/authorization/dialog` +
                   `?response_type=code&client_id=${encodeURIComponent(ak)}&redirect_uri=${encodeURIComponent(redir)}`;
@@ -1364,6 +1370,18 @@ function setPnL(entryPx, curPx) {
 
 function authMsg(t) { q('auth-msg').textContent = t; }
 
+// Show a short label for the active proxy (Cloudflare / Oracle / custom)
+function updateProxyIndicator() {
+  const el = q('proxy-ind');
+  if (!el) return;
+  const url = ST.workerUrl || '';
+  let label = '—';
+  if (url.includes('workers.dev'))      label = 'Cloudflare ☁️';
+  else if (/^http:\/\/\d+\.\d+\.\d+\.\d+/.test(url)) label = 'Oracle VM ' + url.replace(/^https?:\/\//, '').split(':')[0];
+  else if (url) label = url.replace(/^https?:\/\//, '').split('/')[0];
+  el.textContent = label;
+}
+
 /* ════════════════════════════════════════════════════
    LOG
 ════════════════════════════════════════════════════ */
@@ -1492,6 +1510,7 @@ function init() {
   q('worker-url').value  = ST.workerUrl;
   q('api-key').value     = ST.apiKey;
   q('api-secret').value  = ST.apiSecret;
+  updateProxyIndicator();
 
   // Populate strategy fields
   q('t-entry').value = ST.entryTime;
@@ -1577,6 +1596,7 @@ function init() {
     ST.apiKey    = q('api-key').value.trim();
     ST.apiSecret = q('api-secret').value.trim();
     persist();
+    updateProxyIndicator();
     authMsg('✓ Settings saved');
     setTimeout(() => authMsg(''), 2000);
   };
