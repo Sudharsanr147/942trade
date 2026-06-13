@@ -829,30 +829,8 @@ function setAutoLots(v) {
   persist();
 }
 /* ════════════════════════════════════════════════════
-   DIRECT ORDER CALL — bypasses Cloudflare Worker
-   Uses device's actual IP so Upstox IP whitelist works.
-   Market data still goes through Cloudflare (no IP restriction there).
-════════════════════════════════════════════════════ */
-async function directUpstox(path, method, body) {
-  const res = await fetch('https://api.upstox.com' + path, {
-    method,
-    headers: {
-      'Authorization': `Bearer ${ST.accessToken}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Api-Version': '2.0'
-    },
-    body: JSON.stringify(body)
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = json?.errors?.[0]?.message || json?.message || `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return json;
-}
-
-async function placeMarket(instrKey, txn, qty) {
+   ORDERS — routed via proxy (Oracle VM static IP)
+════════════════════════════════════════════════════ */async function placeMarket(instrKey, txn, qty) {
   // txn: 'BUY' | 'SELL'
   const body = {
     quantity:           qty,
@@ -867,8 +845,8 @@ async function placeMarket(instrKey, txn, qty) {
     trigger_price:      0,
     is_amo:             false
   };
-  // Direct call — uses phone IP, not Cloudflare IP
-  const d = await directUpstox('/v2/order/place', 'POST', body);
+  // Routed via proxy (Oracle VM static IP) — Cloudflare or Oracle, set in Setup tab
+  const d = await upstox('/v2/order/place', 'POST', body);
   const id = d?.data?.order_id;
   if (!id) throw new Error('No order_id returned');
   return id;
