@@ -724,6 +724,16 @@ async function getOptLTP(instrKey) {
   return parseFloat(Object.values(d?.data || {})[0]?.last_price) || 0;
 }
 
+// Format a Date as YYYY-MM-DD using LOCAL date components (not UTC)
+// toISOString() converts to UTC, which shifts the date back during
+// 00:00-05:30 IST — this caused wrong expiry dates to be scanned.
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 async function getLiveExpiry() {
   const key = encodeURIComponent('NSE_INDEX|Nifty 50');
 
@@ -732,7 +742,7 @@ async function getLiveExpiry() {
     const d = await upstox(`/v2/option/chain?instrument_key=${key}`);
     const expiries = d?.data?.expiry_list || d?.data?.expiryList;
     if (Array.isArray(expiries) && expiries.length) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDateStr(new Date());
       const nearest = expiries.filter(e => e >= today).sort()[0];
       if (nearest) { lg(`📅 Expiry from API list: ${nearest}`, 's'); return nearest; }
     }
@@ -749,7 +759,7 @@ async function getLiveExpiry() {
   for (let i = 0; i <= 5; i++) {
     const d = new Date(now);
     d.setDate(now.getDate() + daysAhead - i);
-    if (d.getDay() !== 0) candidates.push(d.toISOString().split('T')[0]); // skip Sunday
+    if (d.getDay() !== 0) candidates.push(localDateStr(d)); // skip Sunday
   }
 
   lg(`📅 Scanning expiry candidates: ${candidates.slice(0, 4).join(', ')}`, 'i');
