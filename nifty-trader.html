@@ -333,8 +333,9 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
     <div class="sec">Execution Mode</div>
     <div class="mrow">
-      <button class="mbtn on" id="m-semi" onclick="setMode('semi')">⚡ Semi-Auto</button>
-      <button class="mbtn"    id="m-auto" onclick="setMode('auto')">🤖 Full Auto</button>
+      <button class="mbtn on" id="m-semi"  onclick="setMode('semi')">⚡ Semi-Auto</button>
+      <button class="mbtn"    id="m-auto"  onclick="setMode('auto')">🤖 Full Auto</button>
+      <button class="mbtn"    id="m-cloud" onclick="setMode('cloud')">☁️ Cloud</button>
     </div>
     <div class="info" id="mode-info">
       <b>Semi-Auto:</b> At entry time the app identifies the strike and waits for your tap before placing the order.
@@ -701,6 +702,8 @@ async function exchangeCode(code) {
     setConn(true);
     authMsg('✅ Authenticated successfully');
     lg('✅ Upstox connected', 's');
+    // Auto-push token to cloud engine (silent, non-blocking)
+    pushTokenToCloud(d.access_token);
   } catch(e) {
     authMsg('❌ ' + e.message);
     lg('Auth error: ' + e.message, 'e');
@@ -918,11 +921,11 @@ function armAndEnterNow() {
   const dur = parseInt(q('duration').value) || 30;
   q('t-exit').value = calcExitTime(entryTime, dur);
 
-  // Arm with these values
+  // Arm (routes to cloud or local based on mode)
   arm();
 
-  // Fire immediately — bypass the scheduled timer
-  if (ST.armed) {
+  // Local mode only: fire immediately after arming
+  if (ST.mode !== 'cloud' && ST.armed) {
     clearTimeout(ST._entryTimer);
     onEntryTime();
   }
@@ -947,6 +950,10 @@ function arm() {
   ST.lotSize   = parseInt(q('lotsize').value);
   persist();
 
+  // Cloud mode — send to Oracle VM engine
+  if (ST.mode === 'cloud') { armCloud(); return; }
+
+  // Local mode — run in browser
   const msEntry = msTo(ST.entryTime);
   if (msEntry < 0) { alert(`Entry time ${ST.entryTime} has already passed today.`); return; }
 
@@ -982,7 +989,14 @@ function arm() {
 
 function disarm() {
   if (!confirm('Disarm strategy and reset trade state?')) return;
-  clearAllTimers();
+
+  // Cloud disarm
+  if (ST.mode === 'cloud') {
+    fetch(engineUrl() + '/engine/disarm', { method: 'POST' }).catch(() => {});
+    stopCloudPoll();
+  } else {
+    clearAllTimers();
+  }
   Object.assign(ST, {
     armed: false, status: 'idle', instr: null,
     entryPrice: null, slLevel: null, tgtLevel: null,
@@ -1182,14 +1196,24 @@ async function doSquareOff(reason) {
 }
 
 function confirmTrade() { doEntry(); }
-function manualSqOff()  { if (confirm('Square off position now?')) doSquareOff('Manual'); }
+function manualSqOff() {
+  if (!confirm('Square off position now?')) return;
+  if (ST.mode === 'cloud') {
+    fetch(engineUrl() + '/engine/squareoff', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => lg(d.ok ? '🛑 Cloud square off triggered' : `❌ ${d.error}`, d.ok ? 'w' : 'e'))
+      .catch(e => lg(`Square off error: ${e.message}`, 'e'));
+  } else {
+    doSquareOff('Manual');
+  }
+}
 
 /* ════════════════════════════════════════════════════
    MONITORING LOOP
 ════════════════════════════════════════════════════ */
 function startMonitor() {
   stopMonitor();
-  ST._monitorIvl = setInterval(monitorTick, 5000);
+  ST._monitorIvl = setInterval(monitorTick, 1000); // every 1s — critical for SL/Target
   monitorTick();
 }
 
@@ -1315,11 +1339,15 @@ function go(tab) {
 
 function setMode(m) {
   ST.mode = m;
-  q('m-semi').classList.toggle('on', m === 'semi');
-  q('m-auto').classList.toggle('on', m === 'auto');
-  q('mode-info').innerHTML = m === 'semi'
-    ? '<b>Semi-Auto:</b> At entry time the app identifies the strike and waits for your tap before placing the order.'
-    : '<b>Full Auto:</b> Order is placed automatically at entry time. No confirmation needed.';
+  q('m-semi').classList.toggle('on',  m === 'semi');
+  q('m-auto').classList.toggle('on',  m === 'auto');
+  q('m-cloud').classList.toggle('on', m === 'cloud');
+  const info = {
+    semi:  '<b>Semi-Auto:</b> At entry time the app identifies the strike and waits for your tap before placing the order.',
+    auto:  '<b>Full Auto:</b> Order is placed automatically at entry time. No confirmation needed.',
+    cloud: '<b>☁️ Cloud Mode:</b> Oracle VM runs the strategy. Phone can be switched off after arming — entry, monitoring and exit all happen on the server.'
+  };
+  q('mode-info').innerHTML = info[m] || '';
   persist();
 }
 
@@ -1460,6 +1488,125 @@ function fmtMs(ms) {
   const tot = Math.floor(Math.max(ms, 0) / 1000);
   return [Math.floor(tot / 3600), Math.floor((tot % 3600) / 60), tot % 60]
     .map(v => String(v).padStart(2, '0')).join(':');
+}
+
+/* ════════════════════════════════════════════════════
+   CLOUD ENGINE — Oracle VM strategy runner
+════════════════════════════════════════════════════ */
+const engineUrl = () => ST.workerUrl.replace(/\/$/, '');
+
+// Push token to VM after each Upstox authentication
+async function pushTokenToCloud(token) {
+  if (!ST.workerUrl) return;
+  try {
+    const r = await fetch(engineUrl() + '/engine/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const d = await r.json();
+    if (d.ok) lg('🔑 Token sent to cloud engine', 's');
+    else lg(`⚠️ Token push failed: ${d.error}`, 'w');
+  } catch(e) {
+    lg(`⚠️ Token push failed: ${e.message}`, 'w');
+  }
+}
+
+// Arm the cloud engine with current strategy config
+async function armCloud() {
+  lg('☁️ Sending strategy to cloud engine…', 'i');
+  try {
+    const r = await fetch(engineUrl() + '/engine/arm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dir: ST.dir, entryTime: ST.entryTime, exitTime: ST.exitTime,
+        otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
+        lots: ST.lots, lotSize: ST.lotSize,
+      })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Engine rejected arm');
+
+    ST.armed = true;
+    setStatus('armed');
+    q('btn-arm').style.display    = 'none';
+    q('btn-disarm').style.display = 'block';
+    lg('✅ Cloud engine armed — phone can now be locked', 's');
+    startCloudPoll();
+    go('monitor');
+  } catch(e) {
+    lg(`❌ Cloud arm failed: ${e.message} — trying local fallback`, 'e');
+    // Fall back to local mode
+    ST.mode = 'semi';
+    setMode('semi');
+    arm();
+  }
+}
+
+// Poll cloud engine status every 10s
+let _cloudPollIvl = null;
+
+function startCloudPoll() {
+  stopCloudPoll();
+  _cloudPollIvl = setInterval(fetchCloudStatus, 1000); // every 1s — live display
+  fetchCloudStatus(); // immediate first fetch
+}
+
+function stopCloudPoll() {
+  clearInterval(_cloudPollIvl);
+  _cloudPollIvl = null;
+}
+
+async function fetchCloudStatus() {
+  if (!ST.armed || ST.mode !== 'cloud') { stopCloudPoll(); return; }
+  try {
+    const r = await fetch(engineUrl() + '/engine/status');
+    const d = await r.json();
+    if (!d.ok) return;
+
+    // Update status badge
+    if (d.status && d.status !== ST.status) setStatus(d.status);
+
+    // Update price displays
+    if (d.spotPrice)   q('spot').textContent    = parseFloat(d.spotPrice).toFixed(2);
+    if (d.optionPrice) q('opt-ltp').textContent = `₹${parseFloat(d.optionPrice).toFixed(2)}`;
+
+    if (d.entryPrice) {
+      q('entry-px').textContent  = parseFloat(d.entryPrice).toFixed(2);
+      q('sl-level').textContent  = `₹${parseFloat(d.slLevel).toFixed(2)}`;
+      q('tgt-level').textContent = `₹${parseFloat(d.tgtLevel).toFixed(2)}`;
+      if (d.config) q('qty-lbl').textContent = `${d.config.lots * d.config.lotSize} (${d.config.lots} lot)`;
+      q('sltgt-card').style.display = 'block';
+      showSqOff(true);
+    }
+
+    if (d.instr) {
+      q('instr-lbl').textContent = `${d.instr.strike}${d.instr.type} ${d.instr.expiry}`;
+    }
+
+    // P&L
+    if (d.entryPrice && d.optionPrice) setPnL(d.entryPrice, d.optionPrice);
+
+    // Merge cloud log into app log
+    if (Array.isArray(d.log)) {
+      const seen = new Set(ST.events.map(e => e.t + e.msg));
+      const fresh = d.log.filter(e => !seen.has(e.t + e.msg));
+      if (fresh.length) { ST.events = [...fresh, ...ST.events].slice(0, 200); renderLog(); }
+    }
+
+    // Terminal states
+    if (['done', 'error'].includes(d.status)) {
+      stopCloudPoll();
+      ST.armed = false;
+      q('btn-arm').style.display    = 'block';
+      q('btn-disarm').style.display = 'none';
+      showSqOff(false);
+      persist();
+    }
+  } catch(e) {
+    lg(`Cloud poll: ${e.message}`, 'w');
+  }
 }
 
 /* ════════════════════════════════════════════════════
@@ -1628,6 +1775,10 @@ function init() {
   // Request push notification permission
   if (Notification?.permission === 'default') {
     Notification.requestPermission();
+  }
+
+  if (ST.mode === 'cloud' && ST.armed) {
+    startCloudPoll();
   }
 
   lg('NIFTY Trader v2 started', 'i');
