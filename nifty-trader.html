@@ -1536,11 +1536,12 @@ async function armCloud() {
     startCloudPoll();
     go('monitor');
   } catch(e) {
-    lg(`❌ Cloud arm failed: ${e.message} — trying local fallback`, 'e');
-    // Fall back to local mode
-    ST.mode = 'semi';
-    setMode('semi');
-    arm();
+    lg(`❌ Cloud arm failed: ${e.message}`, 'e');
+    if (e.message.includes('token') || e.message.includes('Token')) {
+      lg('💡 Fix: Go to Setup tab → tap Save Settings to push your token to the VM', 'w');
+    }
+    alert(`Cloud engine error: ${e.message}\n\nFix: Go to Setup tab → tap Save Settings to push your token to the VM, then try again.`);
+    // Do NOT fall back to local — user must explicitly choose
   }
 }
 
@@ -1754,6 +1755,8 @@ function init() {
     ST.apiSecret = q('api-secret').value.trim();
     persist();
     updateProxyIndicator();
+    // Push existing token to cloud engine whenever settings are saved
+    if (ST.accessToken) pushTokenToCloud(ST.accessToken);
     authMsg('✓ Settings saved');
     setTimeout(() => authMsg(''), 2000);
   };
