@@ -1018,10 +1018,29 @@ function disarm() {
   persist();
 }
 
-/* ── Fire Now: manual entry override ─────────────── */
 function fireNow() {
+  if (ST.mode === 'cloud') {
+    // Cloud mode: re-arm with entry timestamp = now + 2s (fires immediately on VM)
+    const entryTs = Date.now() + 2000;
+    const exitTs  = entryTs + (parseInt(q('duration').value) || 30) * 60000;
+    lg('⚡ Fire Now — sending immediate entry to cloud engine', 'i');
+    fetch(engineUrl() + '/engine/arm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dir: ST.dir, entryTs, exitTs,
+        otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
+        lots: ST.lots, lotSize: ST.lotSize,
+      })
+    }).then(r => r.json()).then(d => {
+      if (d.ok) lg('✅ Cloud engine firing now', 's');
+      else lg(`❌ ${d.error}`, 'e');
+    }).catch(e => lg(`Fire Now error: ${e.message}`, 'e'));
+    return;
+  }
+  // Local mode
   if (ST.status !== 'armed') return;
-  clearTimeout(ST._entryTimer); // cancel the scheduled timer — won't double-fire
+  clearTimeout(ST._entryTimer);
   lg('⚡ Fire Now tapped — triggering entry immediately', 'i');
   onEntryTime();
 }
@@ -1512,6 +1531,15 @@ async function pushTokenToCloud(token) {
   }
 }
 
+// Convert IST time string to absolute Unix timestamp (ms)
+// This avoids VM UTC vs IST confusion
+function timeToTs(timeStr) {
+  const [h, m, s] = (timeStr || '00:00:00').split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, s || 0, 0);
+  return d.getTime();
+}
+
 // Arm the cloud engine with current strategy config
 async function armCloud() {
   lg('☁️ Sending strategy to cloud engine…', 'i');
@@ -1520,7 +1548,9 @@ async function armCloud() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        dir: ST.dir, entryTime: ST.entryTime, exitTime: ST.exitTime,
+        dir:     ST.dir,
+        entryTs: timeToTs(ST.entryTime),  // absolute ms timestamp — no timezone issues
+        exitTs:  timeToTs(ST.exitTime),
         otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
         lots: ST.lots, lotSize: ST.lotSize,
       })
