@@ -1031,6 +1031,7 @@ function fireNow() {
         dir: ST.dir, entryTs, exitTs,
         otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
         lots: ST.lots, lotSize: ST.lotSize,
+        autoLots: ST.autoLots, deployPct: ST.deployPct || 90,
       })
     }).then(r => r.json()).then(d => {
       if (d.ok) lg('✅ Cloud engine firing now', 's');
@@ -1548,11 +1549,17 @@ async function armCloud() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        dir:     ST.dir,
-        entryTs: timeToTs(ST.entryTime),  // absolute ms timestamp — no timezone issues
-        exitTs:  timeToTs(ST.exitTime),
-        otm: ST.otm, step: ST.step, sl: ST.sl, tgt: ST.tgt,
-        lots: ST.lots, lotSize: ST.lotSize,
+        dir:       ST.dir,
+        entryTs:   timeToTs(ST.entryTime),
+        exitTs:    timeToTs(ST.exitTime),
+        otm:       ST.otm,
+        step:      ST.step,
+        sl:        ST.sl,
+        tgt:       ST.tgt,
+        lots:      ST.lots,
+        lotSize:   ST.lotSize,
+        autoLots:  ST.autoLots,
+        deployPct: ST.deployPct || 90,
       })
     });
     const d = await r.json();
