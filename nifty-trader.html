@@ -260,6 +260,80 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
 @keyframes pulseGreen { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,120,.3)} 60%{box-shadow:0 0 0 8px rgba(0,212,120,0)} }
 .pulse-g { animation:pulseGreen 2s ease infinite; }
+/* ── AUTO STRATEGY STYLES ─────────────────────────────── */
+.aslot-card{background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
+.aslot-card:hover{border-color:var(--purple)}
+.aslot-card.disabled{opacity:.5}
+.aslot-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.aslot-name{font-weight:600;font-size:13px}
+.aslot-toggle{position:relative;width:34px;height:18px;flex-shrink:0}
+.aslot-toggle input{opacity:0;width:0;height:0}
+.aslot-toggle .ak{position:absolute;inset:0;background:var(--s3);border-radius:9px;cursor:pointer;transition:.2s}
+.aslot-toggle input:checked+.ak{background:var(--purple)}
+.aslot-toggle .ak::before{content:'';position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;top:3px;left:3px;transition:.2s}
+.aslot-toggle input:checked+.ak::before{transform:translateX(16px)}
+.aslot-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.atag{font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--s3);padding:2px 5px;border-radius:3px}
+.atag span{color:var(--txt)}
+.aset-row{display:flex;align-items:center;gap:5px;margin-top:4px;flex-wrap:wrap}
+.adp{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px}
+.adp-ce{background:rgba(0,212,120,.15);color:var(--green)}
+.adp-pe{background:rgba(255,45,85,.15);color:var(--red)}
+.acard-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bdr)}
+.aact-btn{flex:1;padding:6px;border-radius:5px;font-size:11px;cursor:pointer;font-family:var(--sans);font-weight:500;border:1px solid}
+.aact-dup{background:rgba(30,144,255,.08);color:var(--blue);border-color:rgba(30,144,255,.2)}
+.aact-del{background:rgba(255,45,85,.08);color:var(--red);border-color:rgba(255,45,85,.2)}
+/* VM status badges */
+.vm-card{background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;margin-bottom:6px}
+.vm-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.vm-badge{font-size:10px;font-weight:600;font-family:var(--mono);padding:2px 7px;border-radius:3px}
+.vb-idle{background:var(--s3);color:var(--dim)}
+.vb-wait{background:rgba(245,166,35,.12);color:var(--amber)}
+.vb-ok{background:rgba(0,212,120,.12);color:var(--green)}
+.vb-skip{background:rgba(255,45,85,.12);color:var(--red)}
+/* Slot editor modal */
+#slot-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;overflow-y:auto}
+#slot-modal-overlay.open{display:block}
+#slot-modal{background:var(--s1);min-height:100dvh}
+#slot-modal-hdr{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bdr);position:sticky;top:0;background:var(--s1);z-index:10}
+#slot-modal-hdr h3{font-size:13px;font-weight:600;flex:1}
+.sm-close{width:30px;height:30px;border-radius:50%;background:var(--s3);border:none;color:var(--txt);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#slot-modal-body{padding:16px}
+/* Condition sets */
+.cset{border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.cset.cerr{border-color:var(--red)}
+.cset-hdr{padding:9px 12px;background:var(--s2);border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.cset-dir{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;border:none}
+.cset-dir.ce{background:rgba(0,212,120,.15);color:var(--green)}
+.cset-dir.pe{background:rgba(255,45,85,.15);color:var(--red)}
+.cset-name-inp{background:transparent;border:none;color:var(--txt);font-family:var(--sans);font-size:11px;outline:none;flex:1;min-width:60px}
+.cset-logic{display:flex;background:var(--s3);border-radius:5px;padding:2px;flex-shrink:0}
+.cset-logic button{border:none;border-radius:4px;padding:3px 7px;background:none;color:var(--dim);font-size:11px;cursor:pointer}
+.cset-logic button.on{background:var(--purple);color:#fff}
+.cset-acts{display:flex;gap:4px;align-items:center;margin-left:auto}
+.ib{background:none;border:none;cursor:pointer;padding:3px 5px;font-size:13px;color:var(--dim);border-radius:3px}
+.ib:hover{color:var(--txt);background:var(--s3)}.ib.del:hover{color:var(--red)}
+.cset-body{padding:10px 12px;background:var(--bg)}
+/* Condition rows */
+.cond-row{background:var(--s2);border:1px solid var(--bdr);border-radius:5px;padding:7px 9px;margin-bottom:5px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.cond-row.cerr{border-color:var(--red);background:rgba(255,45,85,.04)}
+.cond-row select{background:var(--s3);border:1px solid var(--bdr);border-radius:4px;padding:4px 5px;color:var(--txt);font-family:var(--mono);font-size:11px;outline:none;appearance:none;cursor:pointer}
+.cond-row select:focus{border-color:var(--purple)}
+.cond-row select.cts{color:var(--blue)}.cond-row select.cop{color:var(--amber);width:42px}
+.cond-row input.cpts{background:var(--s3);border:1px solid var(--bdr);border-radius:4px;padding:4px 5px;color:var(--amber);font-family:var(--mono);font-size:11px;width:50px;text-align:center;outline:none}
+.csep{font-size:10px;color:var(--dim);white-space:nowrap}
+.cdel{background:none;border:none;color:var(--dim);font-size:12px;cursor:pointer;margin-left:auto;padding:0 2px}
+.cdel:hover{color:var(--red)}
+/* Conflict panel */
+#slot-conflict-panel{display:none;background:rgba(255,45,85,.06);border:1px solid rgba(255,45,85,.25);border-radius:var(--r);padding:10px 12px;margin-top:10px}
+#slot-conflict-panel.show{display:block}
+#slot-conflict-panel.ok{background:rgba(0,212,120,.06);border-color:rgba(0,212,120,.25)}
+.cf-item{display:flex;gap:7px;font-size:11px;line-height:1.5;padding:4px 0;border-bottom:1px solid rgba(255,45,85,.12)}
+.cf-item:last-child{border:none}.cf-item.ok{color:var(--green)}
+/* Lots mode */
+.lots-mode{display:flex;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:3px;margin-bottom:8px}
+.lots-mode button{flex:1;padding:7px;border:none;border-radius:6px;background:none;color:var(--dim);font-family:var(--sans);font-size:12px;cursor:pointer}
+.lots-mode button.on{background:var(--s3);color:var(--txt)}
 </style>
 </head>
 <body>
@@ -524,6 +598,24 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   </div>
 
   <!-- ┌─────────────────────────────────────────────┐
+       │  AUTO STRATEGY TAB                          │
+       └─────────────────────────────────────────────┘ -->
+  <div class="tab" id="t-auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Auto Strategies</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="auto-vm-status">Slots push to VM on login</div>
+      </div>
+      <button onclick="openSlotEditor(null)" style="background:var(--purple);border:none;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">+ New Slot</button>
+    </div>
+    <div id="auto-slot-list">
+      <div style="text-align:center;padding:28px;color:var(--dim);font-size:12px">No auto-strategy slots yet.<br>Tap + New Slot to create one.</div>
+    </div>
+    <!-- Slot status from VM -->
+    <div id="auto-vm-cards" style="margin-top:12px"></div>
+  </div>
+
+  <!-- ┌─────────────────────────────────────────────┐
        │  LOG TAB                                    │
        └─────────────────────────────────────────────┘ -->
   <div class="tab" id="t-log">
@@ -551,6 +643,10 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <button class="nb" id="nav-monitor"  onclick="go('monitor')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     Monitor
+  </button>
+  <button class="nb" id="nav-auto" onclick="go('auto')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    Auto
   </button>
   <button class="nb" id="nav-log"      onclick="go('log')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -704,6 +800,8 @@ async function exchangeCode(code) {
     lg('✅ Upstox connected', 's');
     // Auto-push token to cloud engine (silent, non-blocking)
     pushTokenToCloud(d.access_token);
+    // Auto-push all enabled auto-strategy slots to VM
+    pushSlotsToVM();
   } catch(e) {
     authMsg('❌ ' + e.message);
     lg('Auth error: ' + e.message, 'e');
@@ -1586,7 +1684,7 @@ let _cloudPollIvl = null;
 
 function startCloudPoll() {
   stopCloudPoll();
-  _cloudPollIvl = setInterval(fetchCloudStatus, 1000); // every 1s — live display
+  _cloudPollIvl = setInterval(fetchCloudStatus, 500); // every 500ms — live display
   fetchCloudStatus(); // immediate first fetch
 }
 
@@ -1824,6 +1922,496 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+/* ════════════════════════════════════════════════════
+   AUTO STRATEGY MODULE
+════════════════════════════════════════════════════ */
+
+// ── State ─────────────────────────────────────────
+let autoSlots = [];
+let seEditSets = [];
+let seAutoLots = false;
+let seCondFlags = {};
+let autoVmPollIvl = null;
+
+function saveAutoSlots() { localStorage.setItem('auto_slots_v1', JSON.stringify(autoSlots)); }
+function loadAutoSlots() {
+  try { autoSlots = JSON.parse(localStorage.getItem('auto_slots_v1') || '[]'); } catch(_) { autoSlots = []; }
+}
+
+// ── Push all enabled slots to VM (called after every login) ──
+async function pushSlotsToVM() {
+  const enabled = autoSlots.filter(s => s.enabled);
+  if (!enabled.length || !ST.workerUrl || !ST.accessToken) return;
+  try {
+    const r = await fetch(engineUrl() + '/engine/slots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slots: enabled })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      lg(`☁️ Auto: ${d.scheduled} slot(s) scheduled on VM`, 's');
+      q('auto-vm-status').textContent = `✅ ${d.scheduled} slot(s) live on VM`;
+      q('auto-vm-status').style.color = 'var(--green)';
+      startAutoVmPoll();
+    }
+  } catch(e) { lg(`⚠️ Auto slot push: ${e.message}`, 'w'); }
+}
+
+// ── VM status polling for auto slots ─────────────
+function startAutoVmPoll() {
+  clearInterval(autoVmPollIvl);
+  autoVmPollIvl = setInterval(fetchAutoVmStatus, 500); // every 500ms
+  fetchAutoVmStatus();
+}
+
+async function fetchAutoVmStatus() {
+  if (!ST.workerUrl) return;
+  try {
+    const r = await fetch(engineUrl() + '/engine/slots/status');
+    const d = await r.json();
+    if (d.ok) renderVmSlotStatus(d.slots, d.engineStatus);
+  } catch(_) {}
+}
+
+function renderVmSlotStatus(vmSlots, engStatus) {
+  const el = q('auto-vm-cards');
+  if (!vmSlots?.length) { el.innerHTML = ''; return; }
+  const slbl = { idle:'IDLE', waiting:'WAITING', checking:'CHECKING CONDITIONS', placing:'PLACING…', placed:'✅ PLACED', skipped:'🚫 SKIPPED', error:'❌ ERROR', passed:'PASSED' };
+  const scls = { idle:'vb-idle', waiting:'vb-wait', checking:'vb-wait', placing:'vb-wait', placed:'vb-ok', skipped:'vb-skip', error:'vb-skip', passed:'vb-idle' };
+  el.innerHTML = `
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:6px">VM Slot Status</div>
+    ${vmSlots.map(s => `
+      <div class="vm-card">
+        <div class="vm-hdr">
+          <span style="font-size:12px;font-weight:600">${s.name}</span>
+          <span class="vm-badge ${scls[s.status]||'vb-idle'}">${slbl[s.status]||s.status?.toUpperCase()}</span>
+        </div>
+        <div style="font-size:10px;color:var(--dim)">${s.entryTime} → ${s.exitTime} · ${s.sets} set(s)</div>
+      </div>`).join('')}`;
+}
+
+// ── Slot list renderer ────────────────────────────
+function renderAutoSlots() {
+  const el = q('auto-slot-list');
+  if (!autoSlots.length) {
+    el.innerHTML = '<div style="text-align:center;padding:28px;color:var(--dim);font-size:12px">No auto-strategy slots yet.<br>Tap + New Slot to create one.</div>';
+    return;
+  }
+  el.innerHTML = autoSlots.map(s => `
+    <div class="aslot-card ${s.enabled?'':'disabled'}" onclick="openSlotEditor('${s.id}')">
+      <div class="aslot-hdr">
+        <span class="aslot-name">${s.name||'Unnamed'}</span>
+        <label class="aslot-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" ${s.enabled?'checked':''} onchange="toggleAutoSlot('${s.id}',this.checked)">
+          <span class="ak"></span>
+        </label>
+      </div>
+      <div class="aslot-meta">
+        <span class="atag">▶ <span>${s.entryTime}</span></span>
+        <span class="atag">■ <span>${s.exitTime}</span></span>
+        <span class="atag">SL <span>${s.sl}pts</span></span>
+        <span class="atag">TGT <span>${s.tgt}pts</span></span>
+        <span class="atag">${s.autoLots?'💰 Auto':'<span>'+s.lots+'×'+s.lotSize+'</span>'}</span>
+      </div>
+      ${(s.conditionSets||[]).filter(cs=>cs.enabled).map((cs,i) => `
+        <div class="aset-row">
+          <span style="font-size:10px;color:var(--dim)">${i+1}.</span>
+          <span class="adp ${cs.direction==='CE'?'adp-ce':'adp-pe'}">BUY ${cs.direction}</span>
+          <span style="font-size:10px;color:var(--dim)">${cs.logic}</span>
+          ${cs.name?`<span style="font-size:10px;color:var(--dim)">· ${cs.name}</span>`:''}
+          <span style="font-size:10px;color:var(--dim);margin-left:auto">${cs.conditions.length} cond(s)</span>
+        </div>`).join('')}
+      <div class="acard-actions">
+        <button class="aact-btn aact-dup" onclick="event.stopPropagation();dupAutoSlot('${s.id}')">⧉ Duplicate</button>
+        <button class="aact-btn aact-del" onclick="event.stopPropagation();delAutoSlotDirect('${s.id}')">✕ Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function toggleAutoSlot(id, en) {
+  const s = autoSlots.find(x => x.id === id);
+  if (s) { s.enabled = en; saveAutoSlots(); renderAutoSlots(); }
+}
+
+function dupAutoSlot(id) {
+  const src = autoSlots.find(s => s.id === id);
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id   = `slot_${Date.now()}`;
+  copy.name = src.name + ' (copy)';
+  copy.conditionSets = copy.conditionSets.map(cs => ({
+    ...cs, id: `set_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
+    conditions: cs.conditions.map(c => ({ ...c, id: `c_${Date.now()}_${Math.random().toString(36).slice(2,5)}` }))
+  }));
+  autoSlots.push(copy);
+  saveAutoSlots(); renderAutoSlots();
+  lg(`Auto: duplicated "${src.name}"`, 'i');
+}
+
+function delAutoSlotDirect(id) {
+  const s = autoSlots.find(x => x.id === id);
+  if (!s || !confirm(`Delete "${s.name}"?`)) return;
+  autoSlots = autoSlots.filter(x => x.id !== id);
+  saveAutoSlots(); renderAutoSlots();
+  lg(`Auto: deleted "${s.name}"`, 'w');
+}
+
+// ── Slot Editor ───────────────────────────────────
+function openSlotEditor(id) {
+  const slot = id ? autoSlots.find(s => s.id === id) : null;
+  q('slot-modal-title').textContent = slot ? 'Edit Slot' : 'New Strategy Slot';
+  q('se-btn-delete').style.display = slot ? 'block' : 'none';
+  q('se-id').value = slot?.id || '';
+  seCondFlags = {};
+  q('slot-conflict-panel').className = '';
+  q('slot-conflict-items').innerHTML = '';
+  if (slot) {
+    q('se-name').value    = slot.name;
+    q('se-entry').value   = slot.entryTime;
+    q('se-exit').value    = slot.exitTime;
+    q('se-otm').value     = slot.otm;
+    q('se-step').value    = slot.step;
+    q('se-sl').value      = slot.sl;
+    q('se-tgt').value     = slot.tgt;
+    q('se-lots').value    = slot.lots;
+    q('se-lotsize').value = slot.lotSize;
+    q('se-lotsize2').value= slot.lotSize;
+    q('se-deploy').value  = slot.deployPct || 90;
+    seEditSets = (slot.conditionSets||[]).map(cs => ({
+      ...cs, conditions: (cs.conditions||[]).map(c => ({...c}))
+    }));
+    seLotsMode(slot.autoLots ? 'auto' : 'manual');
+  } else {
+    q('se-name').value = '';
+    seEditSets = [];
+    seLotsMode('manual');
+  }
+  seRenderSets();
+  q('slot-modal-overlay').classList.add('open');
+}
+
+function closeSlotEditor() { q('slot-modal-overlay').classList.remove('open'); seCondFlags = {}; }
+
+function seLotsMode(m) {
+  seAutoLots = m === 'auto';
+  q('se-lm-manual').classList.toggle('on', m === 'manual');
+  q('se-lm-auto').classList.toggle('on', m === 'auto');
+  q('se-lots-manual').style.display = m === 'manual' ? 'grid' : 'none';
+  q('se-lots-auto').style.display   = m === 'auto'   ? 'grid' : 'none';
+}
+
+function saveSlot() {
+  const issues = seValidate();
+  if (issues.length) {
+    seShowConflicts(issues);
+    alert(`Cannot save — ${issues.length} logic conflict(s) detected. Fix highlighted issues.`);
+    return;
+  }
+  const id = q('se-id').value || `slot_${Date.now()}`;
+  const isNew = !autoSlots.find(s => s.id === id);
+  const slot = {
+    id, enabled: true,
+    name:      q('se-name').value.trim() || 'Unnamed',
+    entryTime: q('se-entry').value,
+    exitTime:  q('se-exit').value,
+    otm:       parseInt(q('se-otm').value)  || 1,
+    step:      parseInt(q('se-step').value) || 50,
+    sl:        parseFloat(q('se-sl').value) || 30,
+    tgt:       parseFloat(q('se-tgt').value)|| 50,
+    lots:      parseInt(q('se-lots').value) || 1,
+    lotSize:   parseInt(seAutoLots ? q('se-lotsize2').value : q('se-lotsize').value) || 65,
+    autoLots:  seAutoLots,
+    deployPct: parseInt(q('se-deploy').value) || 90,
+    conditionSets: seEditSets.map(cs => ({ ...cs, conditions: cs.conditions.map(c => ({...c})) })),
+  };
+  if (isNew) autoSlots.push(slot);
+  else { const i = autoSlots.findIndex(s => s.id === id); autoSlots[i] = slot; }
+  saveAutoSlots(); renderAutoSlots(); closeSlotEditor();
+  // Re-push to VM if connected
+  if (ST.accessToken) pushSlotsToVM();
+}
+
+function deleteSlotFromEditor() {
+  const id = q('se-id').value;
+  if (!id || !confirm('Delete this slot?')) return;
+  autoSlots = autoSlots.filter(s => s.id !== id);
+  saveAutoSlots(); renderAutoSlots(); closeSlotEditor();
+}
+
+// ── Condition Set Builder ─────────────────────────
+const SE_FIELDS = ['open','high','low','close','range','body','mid','upperwick','lowerwick'];
+const SE_FLBL   = {open:'Open',high:'High',low:'Low',close:'Close',range:'H-L',body:'|C-O|',mid:'Mid',upperwick:'UpWk',lowerwick:'LowWk'};
+const SE_OPS    = ['>','<','>=','<=','=='];
+const SE_TIMES  = [];
+for (let h=9;h<=15;h++) for (let m=0;m<60;m++) {
+  const t=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  if (t>='09:15'&&t<='15:29') SE_TIMES.push(t);
+}
+const seTO = v => SE_TIMES.map(t  => `<option value="${t}"${t===v?' selected':''}>${t}</option>`).join('');
+const seFO = v => SE_FIELDS.map(f => `<option value="${f}"${f===v?' selected':''}>${SE_FLBL[f]||f}</option>`).join('');
+const seOO = v => SE_OPS.map(o   => `<option value="${o}"${o===v?' selected':''}>${o}</option>`).join('');
+
+function seAddSet() {
+  seEditSets.push({ id:`set_${Date.now()}`, name:'', direction:'CE', logic:'ALL', enabled:true, conditions:[] });
+  seRenderSets();
+}
+function seRemSet(id)    { seEditSets=seEditSets.filter(s=>s.id!==id); seRenderSets(); }
+function seTogDir(id)    { const s=seEditSets.find(x=>x.id===id); if(s){s.direction=s.direction==='CE'?'PE':'CE';seRenderSets();} }
+function seSetLogic(id,l){ const s=seEditSets.find(x=>x.id===id); if(s){s.logic=l;seRenderSets();} }
+function seMoveUp(id)    { const i=seEditSets.findIndex(s=>s.id===id);if(i>0){[seEditSets[i-1],seEditSets[i]]=[seEditSets[i],seEditSets[i-1]];seRenderSets();} }
+function seMoveDown(id)  { const i=seEditSets.findIndex(s=>s.id===id);if(i<seEditSets.length-1){[seEditSets[i],seEditSets[i+1]]=[seEditSets[i+1],seEditSets[i]];seRenderSets();} }
+function seAddCond(sid)  { const s=seEditSets.find(x=>x.id===sid);if(!s)return;s.conditions.push({id:`c_${Date.now()}`,enabled:true,leftTime:'09:20',leftField:'close',op:'>',rightType:'candle',rightTime:'09:15',rightField:'open',rightValue:0,offsetPts:0});seRenderSets(); }
+function seRemCond(sid,cid){ const s=seEditSets.find(x=>x.id===sid);if(s){s.conditions=s.conditions.filter(c=>c.id!==cid);seRenderSets();} }
+function seUpdCond(sid,cid,f,v){ const s=seEditSets.find(x=>x.id===sid);if(!s)return;const c=s.conditions.find(x=>x.id===cid);if(!c)return;c[f]=v;if(f==='rightType')seRenderSets(); }
+
+function seRenderSets() {
+  const el = q('se-cset-list');
+  el.innerHTML = seEditSets.map((set,si) => `
+    <div class="cset ${seCondFlags[set.id]?'cerr':''}">
+      <div class="cset-hdr">
+        <span style="font-size:10px;color:var(--dim);font-family:var(--mono)">${si+1}</span>
+        <button class="cset-dir ${set.direction==='CE'?'ce':'pe'}" onclick="seTogDir('${set.id}')">BUY ${set.direction}</button>
+        <input class="cset-name-inp" type="text" placeholder="Set name" value="${set.name}"
+          onchange="seEditSets.find(s=>s.id==='${set.id}').name=this.value">
+        <div class="cset-logic">
+          <button class="${set.logic==='ALL'?'on':''}" onclick="seSetLogic('${set.id}','ALL')">ALL</button>
+          <button class="${set.logic==='ANY'?'on':''}" onclick="seSetLogic('${set.id}','ANY')">ANY</button>
+        </div>
+        <div class="cset-acts">
+          <label style="cursor:pointer;display:flex;align-items:center;gap:3px;font-size:10px;color:var(--dim)">
+            <input type="checkbox" ${set.enabled?'checked':''} style="accent-color:var(--purple);width:12px;height:12px"
+              onchange="seEditSets.find(s=>s.id==='${set.id}').enabled=this.checked">on
+          </label>
+          ${si>0?`<button class="ib" onclick="seMoveUp('${set.id}')">↑</button>`:''}
+          ${si<seEditSets.length-1?`<button class="ib" onclick="seMoveDown('${set.id}')">↓</button>`:''}
+          <button class="ib del" onclick="seRemSet('${set.id}')">✕</button>
+        </div>
+      </div>
+      <div class="cset-body">
+        ${set.conditions.map((c,ci) => {
+          const cf = seCondFlags[c.id];
+          return `<div class="cond-row ${cf?'cerr':''}">
+            <input type="checkbox" ${c.enabled?'checked':''} style="accent-color:var(--purple);width:12px;height:12px;cursor:pointer"
+              onchange="seUpdCond('${set.id}','${c.id}','enabled',this.checked)">
+            <span class="csep" style="font-size:9px">${ci+1}</span>
+            <select class="cts" onchange="seUpdCond('${set.id}','${c.id}','leftTime',this.value)">${seTO(c.leftTime)}</select>
+            <select onchange="seUpdCond('${set.id}','${c.id}','leftField',this.value)">${seFO(c.leftField)}</select>
+            <select class="cop" onchange="seUpdCond('${set.id}','${c.id}','op',this.value)">${seOO(c.op)}</select>
+            <select onchange="seUpdCond('${set.id}','${c.id}','rightType',this.value)">
+              <option value="candle"${c.rightType==='candle'?' selected':''}>Candle</option>
+              <option value="value"${c.rightType==='value'?' selected':''}>Value</option>
+            </select>
+            ${c.rightType==='candle'
+              ?`<select class="cts" onchange="seUpdCond('${set.id}','${c.id}','rightTime',this.value)">${seTO(c.rightTime)}</select>
+                <select onchange="seUpdCond('${set.id}','${c.id}','rightField',this.value)">${seFO(c.rightField)}</select>`
+              :`<input class="cpts" type="number" value="${c.rightValue||0}" onchange="seUpdCond('${set.id}','${c.id}','rightValue',this.value)">`}
+            <span class="csep">±</span>
+            <input class="cpts" type="number" value="${c.offsetPts||0}" onchange="seUpdCond('${set.id}','${c.id}','offsetPts',this.value)" title="Offset pts">
+            <span class="csep" style="font-size:9px">pts</span>
+            ${cf?`<span style="font-size:12px">${cf==='impossible'?'🚫':'⚡'}</span>`:''}
+            <button class="cdel" onclick="seRemCond('${set.id}','${c.id}')">✕</button>
+          </div>`;
+        }).join('')}
+        <button onclick="seAddCond('${set.id}')" style="display:block;width:100%;padding:7px;background:rgba(124,92,255,.08);color:var(--purple);border:1px dashed rgba(124,92,255,.3);border-radius:5px;font-size:11px;cursor:pointer;margin-top:4px">+ Add Condition</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── Conflict Detection ────────────────────────────
+const SE_OHLC_ALWAYS = [
+  {f1:'high',rel:'>=',f2:'low'},{f1:'high',rel:'>=',f2:'open'},{f1:'high',rel:'>=',f2:'close'},{f1:'high',rel:'>=',f2:'mid'},
+  {f1:'low',rel:'<=',f2:'high'},{f1:'low',rel:'<=',f2:'open'},{f1:'low',rel:'<=',f2:'close'},{f1:'low',rel:'<=',f2:'mid'},
+  {f1:'mid',rel:'>=',f2:'low'},{f1:'mid',rel:'<=',f2:'high'},
+  {f1:'range',rel:'>=',rv:0},{f1:'body',rel:'>=',rv:0},{f1:'upperwick',rel:'>=',rv:0},{f1:'lowerwick',rel:'>=',rv:0},
+];
+
+function seAbsImpossible(c) {
+  const same = c.rightType==='candle' && c.leftTime===c.rightTime;
+  const off = parseFloat(c.offsetPts||0);
+  if (same) {
+    for (const r of SE_OHLC_ALWAYS) {
+      if (r.f1===c.leftField && r.f2 && r.f2===c.rightField) {
+        if ((r.rel==='>='||r.rel==='>') && (c.op==='<'||c.op==='<=') && off<=0)
+          return `${c.leftTime} ${c.leftField} is always ≥ ${c.rightField} — cannot be ${c.op} ${c.rightField}${off?'+'+off:''}`;
+        if ((r.rel==='<='||r.rel==='<') && (c.op==='>'||c.op==='>=') && off>=0)
+          return `${c.leftTime} ${c.leftField} is always ≤ ${c.rightField} — cannot be ${c.op} ${c.rightField}${off?'+'+off:''}`;
+      }
+      if (r.f1===c.leftField && r.rv!==undefined && c.rightType==='value') {
+        const rv=parseFloat(c.rightValue||0)+off;
+        if (r.rel==='>=' && (c.op==='<'||c.op==='<=') && rv<=r.rv)
+          return `${c.leftField} is always ≥ ${r.rv}, cannot be ${c.op} ${rv}`;
+      }
+    }
+    if (c.leftField===c.rightField && off===0 && (c.op==='<'||c.op==='>'))
+      return `${c.leftTime} ${c.leftField} ${c.op} itself — always false`;
+  }
+  return null;
+}
+
+function seFeasible(op1,a,op2,b){
+  if(op1==='>'&&op2==='<') return a<b;if(op1==='>'&&op2==='<=') return a<b;
+  if(op1==='>='&&op2==='<') return a<b;if(op1==='>='&&op2==='<=') return a<=b;
+  if(op1==='<'&&op2==='>') return b<a;if(op1==='<'&&op2==='>=') return b<a;
+  if(op1==='<='&&op2==='>') return b<a;if(op1==='<='&&op2==='>=') return b<=a;
+  if(op1==='>'&&op2==='==') return b>a;if(op1==='>='&&op2==='==') return b>=a;
+  if(op1==='<'&&op2==='==') return b<a;if(op1==='<='&&op2==='==') return b<=a;
+  if(op1==='=='&&op2==='>') return a>b;if(op1==='=='&&op2==='>=') return a>=b;
+  if(op1==='=='&&op2==='<') return a<b;if(op1==='=='&&op2==='<=') return a<=b;
+  if(op1==='=='&&op2==='==') return Math.abs(a-b)<0.5;
+  return true;
+}
+
+function seContradicts(c1,c2){
+  if(c1.leftTime!==c2.leftTime||c1.leftField!==c2.leftField) return false;
+  if(c1.rightType!==c2.rightType) return false;
+  if(c1.rightType==='candle'&&(c1.rightTime!==c2.rightTime||c1.rightField!==c2.rightField)) return false;
+  const a=parseFloat(c1.offsetPts||0)+(c1.rightType==='value'?parseFloat(c1.rightValue||0):0);
+  const b=parseFloat(c2.offsetPts||0)+(c2.rightType==='value'?parseFloat(c2.rightValue||0):0);
+  return !seFeasible(c1.op,a,c2.op,b);
+}
+
+function seDescCond(c,i){
+  const r=c.rightType==='candle'?`${c.rightTime} ${c.rightField}`:`${c.rightValue}`;
+  const off=parseFloat(c.offsetPts||0);
+  return `Cond ${i+1}: ${c.leftTime} ${c.leftField} ${c.op} ${r}${off?(off>0?'+':'')+off+'pts':''}`;
+}
+
+function seValidate(){
+  const issues=[], sets=seEditSets.filter(s=>s.enabled);
+  seCondFlags={};
+  // 1. Absolute impossibility
+  for(let si=0;si<sets.length;si++){
+    const set=sets[si];
+    const conds=(set.conditions||[]).filter(c=>c.enabled);
+    for(let ci=0;ci<conds.length;ci++){
+      const reason=seAbsImpossible(conds[ci]);
+      if(reason){
+        issues.push({msg:`Set "${set.name||si+1}", ${seDescCond(conds[ci],ci)}: ALWAYS FALSE — ${reason}`,icon:'🚫'});
+        seCondFlags[conds[ci].id]='impossible';
+      }
+    }
+    // 2. Intra-set contradiction (ALL only)
+    if(set.logic==='ALL'){
+      for(let i=0;i<conds.length;i++) for(let j=i+1;j<conds.length;j++){
+        if(seContradicts(conds[i],conds[j])){
+          issues.push({msg:`Set "${set.name||si+1}" (ALL): ${seDescCond(conds[i],i)} ✕ ${seDescCond(conds[j],j)} — cannot both be true`,icon:'⚡'});
+          seCondFlags[conds[i].id]='conflict'; seCondFlags[conds[j].id]='conflict';
+        }
+      }
+    }
+  }
+  // 3. Inter-set mutual exclusivity
+  for(let i=0;i<sets.length;i++) for(let j=i+1;j<sets.length;j++){
+    const A=sets[i],B=sets[j];
+    const ca=(A.conditions||[]).filter(c=>c.enabled);
+    const cb=(B.conditions||[]).filter(c=>c.enabled);
+    if(!ca.length||!cb.length){
+      issues.push({msg:`Set "${A.name||i+1}" or "${B.name||j+1}" has no enabled conditions`,icon:'🔀'}); continue;
+    }
+    let exclusive=false,reason='';
+    if(A.logic==='ALL'&&B.logic==='ALL'){
+      exclusive=ca.some(a=>cb.some(b=>seContradicts(a,b)));
+      if(!exclusive) reason='No contradictory condition pair found — both sets could fire simultaneously';
+    } else if(A.logic==='ALL'&&B.logic==='ANY'){
+      exclusive=cb.every(b=>ca.some(a=>seContradicts(a,b)));
+      if(!exclusive) reason='Not every condition in the ANY set is contradicted by the ALL set';
+    } else if(A.logic==='ANY'&&B.logic==='ALL'){
+      exclusive=ca.every(a=>cb.some(b=>seContradicts(a,b)));
+      if(!exclusive) reason='Not every condition in the ANY set is contradicted by the ALL set';
+    } else {
+      exclusive=ca.every(a=>cb.every(b=>seContradicts(a,b)));
+      if(!exclusive) reason='ANY+ANY: every cross-pair must contradict — at least one pair can coexist';
+    }
+    if(!exclusive) issues.push({msg:`Sets "${A.name||i+1}" & "${B.name||j+1}" NOT mutually exclusive: ${reason}`,icon:'🔀'});
+  }
+  return issues;
+}
+
+function runSlotValidation(){
+  const issues=seValidate();
+  seRenderSets();
+  seShowConflicts(issues);
+}
+
+function seShowConflicts(issues){
+  const panel=q('slot-conflict-panel');
+  const items=q('slot-conflict-items');
+  if(!issues.length){
+    panel.className='show ok';
+    items.innerHTML='<div class="cf-item ok"><span>✅</span><span>All checks passed — conditions are consistent and sets are mutually exclusive.</span></div>';
+    return;
+  }
+  panel.className='show';
+  items.innerHTML=issues.map(iss=>`<div class="cf-item"><span>${iss.icon}</span><span>${iss.msg}</span></div>`).join('');
+}
+
+// ── Init auto module ──────────────────────────────
+loadAutoSlots();
+renderAutoSlots();
+// Start polling VM for slot status on load (if connected)
+if (typeof engineUrl === 'function' && localStorage.getItem('nt3')) {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nt3') || '{}');
+    if (saved.workerUrl && saved.accessToken) startAutoVmPoll();
+  } catch(_) {}
+}
+
 </script>
+<!-- ══ SLOT EDITOR MODAL ══════════════════════════════ -->
+<div id="slot-modal-overlay">
+<div id="slot-modal">
+  <div id="slot-modal-hdr">
+    <button class="sm-close" onclick="closeSlotEditor()">✕</button>
+    <h3 id="slot-modal-title">New Strategy Slot</h3>
+    <button onclick="runSlotValidation()" style="background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.3);border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap">⚠ Check</button>
+    <button onclick="saveSlot()" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+  </div>
+  <div id="slot-modal-body">
+    <input type="hidden" id="se-id">
+    <div style="margin-bottom:10px"><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Slot Name</label>
+      <input id="se-name" type="text" placeholder="e.g. Morning Breakout" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Timing</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Entry Time</label>
+        <input id="se-entry" type="time" step="1" value="09:42:45" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;appearance:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Exit Time</label>
+        <input id="se-exit" type="time" step="1" value="10:15:00" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;appearance:none"></div>
+    </div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Strategy Parameters</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">OTM Strikes</label><input id="se-otm" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Strike Step</label><input id="se-step" type="number" value="50" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">SL (pts)</label><input id="se-sl" type="number" value="30" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    </div>
+    <div style="margin-bottom:8px"><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Target (pts)</label><input id="se-tgt" type="number" value="50" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Position Size</div>
+    <div class="lots-mode" id="se-lots-mode">
+      <button class="on" id="se-lm-manual" onclick="seLotsMode('manual')">✋ Manual Lots</button>
+      <button id="se-lm-auto" onclick="seLotsMode('auto')">💰 Auto from Balance</button>
+    </div>
+    <div id="se-lots-manual" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lots</label><input id="se-lots" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize" type="number" value="65" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    </div>
+    <div id="se-lots-auto" style="display:none;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Deploy % of balance</label><input id="se-deploy" type="number" value="90" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize2" type="number" value="65" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    </div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px">Condition Sets</div>
+    <div style="background:rgba(124,92,255,.05);border:1px solid rgba(124,92,255,.15);border-radius:var(--r);padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:10px">
+      Sets evaluated <b>top→bottom</b>. <b>First satisfied set</b> fires the trade in that direction. <b>No set satisfied → no trade.</b>
+    </div>
+    <div id="se-cset-list"></div>
+    <button onclick="seAddSet()" style="display:block;width:100%;padding:9px;background:rgba(0,212,120,.06);color:var(--green);border:1px dashed rgba(0,212,120,.3);border-radius:var(--r);font-size:12px;cursor:pointer;margin-bottom:10px">+ Add Condition Set</button>
+    <div id="slot-conflict-panel"><div id="slot-conflict-items"></div></div>
+    <div style="border-top:1px solid var(--bdr);margin-top:14px;padding-top:14px">
+      <button id="se-btn-delete" onclick="deleteSlotFromEditor()" style="display:none;width:100%;padding:9px;background:transparent;color:var(--red);border:1px solid #2e1018;border-radius:var(--r);font-size:12px;cursor:pointer">Delete This Slot</button>
+    </div>
+  </div>
+</div>
+</div>
+
 </body>
 </html>
