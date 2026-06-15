@@ -809,11 +809,10 @@ async function findInstrument(expiry, strike, type) {
    BALANCE — for auto-lots calculation
 ════════════════════════════════════════════════════ */
 async function getAvailableFunds() {
-  // Try both known Upstox v2 endpoint variants
+  // Correct Upstox v2 endpoint — note the "get-" prefix
   const endpoints = [
-    '/v2/user/fund-and-margin?segment=SEC',
-    '/v2/user/fund-and-margin',
-    '/v2/user/funds-and-margin',
+    '/v2/user/get-funds-and-margin',
+    '/v2/user/get-funds-and-margin?segment=SEC',
   ];
   for (const ep of endpoints) {
     try {
@@ -822,7 +821,7 @@ async function getAvailableFunds() {
       const funds = parseFloat(
         eq?.available_margin ?? eq?.available_cash ?? eq?.net ?? 0
       );
-      if (funds > 0) { lg(`💰 Balance read from ${ep}`, 'i'); return funds; }
+      if (funds > 0) { lg(`💰 Balance: ₹${funds.toFixed(0)}`, 's'); return funds; }
     } catch(_) {}
   }
   throw new Error('Fund-and-margin endpoint not found — using manual lots');
