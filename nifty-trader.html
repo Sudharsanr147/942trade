@@ -41,6 +41,7 @@
 html,body {
   height:100%; background:var(--bg); color:var(--txt);
   font-family:var(--sans); -webkit-font-smoothing:antialiased;
+  overflow:hidden; /* prevent body scroll — only #content scrolls */
 }
 
 /* ══════════════════════════════════════════════
@@ -72,6 +73,7 @@ html,body {
 #content {
   flex:1; overflow-y:auto; overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
+  min-height:0; /* critical for flex+overflow on Android WebView */
 }
 .tab { display:none; padding:16px; }
 .tab.on { display:block; }
@@ -407,6 +409,8 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       </button>
     </div>
     <div id="storage-debug" style="display:none;margin-top:8px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--dim)"></div>
+
+  </div><!-- end t-setup -->
 
   <!-- ┌─────────────────────────────────────────────┐
        │  STRATEGY TAB                               │
