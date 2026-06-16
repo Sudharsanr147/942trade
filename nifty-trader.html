@@ -609,6 +609,10 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       </div>
       <button onclick="openSlotEditor(null)" style="background:var(--purple);border:none;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">+ New Slot</button>
     </div>
+    <button id="btn-push-auto" onclick="manualPushToVM()"
+      style="display:block;width:100%;padding:11px;background:rgba(0,212,120,.08);color:var(--green);border:1px solid rgba(0,212,120,.25);border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px">
+      ☁️ Push All Slots to VM
+    </button>
     <div id="auto-slot-list">
       <div style="text-align:center;padding:28px;color:var(--dim);font-size:12px">No auto-strategy slots yet.<br>Tap + New Slot to create one.</div>
     </div>
@@ -1941,6 +1945,35 @@ function loadAutoSlots() {
 }
 
 // ── Push all enabled slots to VM (called after every login) ──
+async function manualPushToVM() {
+  const btn = q('btn-push-auto');
+  if (!ST.accessToken) { alert('Connect to Upstox first (Setup tab)'); return; }
+  if (!ST.workerUrl)   { alert('Set Oracle VM URL in Setup tab'); return; }
+  const enabled = autoSlots.filter(s => s.enabled);
+  if (!enabled.length) { alert('No enabled slots to push'); return; }
+  btn.textContent = '⏳ Pushing…'; btn.disabled = true;
+  try {
+    await fetch(engineUrl() + '/engine/token', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: ST.accessToken })
+    });
+    const r = await fetch(engineUrl() + '/engine/slots', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ slots: enabled })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Push failed');
+    lg(`☁️ Auto: ${d.scheduled} slot(s) pushed to VM`, 's');
+    q('auto-vm-status').textContent = `✅ ${d.scheduled} slot(s) live on VM`;
+    q('auto-vm-status').style.color = 'var(--green)';
+    startAutoVmPoll();
+  } catch(e) {
+    lg(`❌ Push failed: ${e.message}`, 'e');
+    alert(`Push failed: ${e.message}`);
+  }
+  btn.textContent = '☁️ Push All Slots to VM'; btn.disabled = false;
+}
+
 async function pushSlotsToVM() {
   const enabled = autoSlots.filter(s => s.enabled);
   if (!enabled.length || !ST.workerUrl || !ST.accessToken) return;
