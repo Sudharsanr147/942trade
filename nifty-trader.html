@@ -1932,9 +1932,8 @@ function init() {
   }
 
   lg('NIFTY Trader v2 started', 'i');
+  initAutoModule();
 }
-
-document.addEventListener('DOMContentLoaded', init);
 
 /* ════════════════════════════════════════════════════
    AUTO STRATEGY MODULE
@@ -2063,44 +2062,30 @@ function renderAutoLog(logEntries, slots) {
 }
 
 function updateMonitorFromVm(d) {
-  // Update Monitor tab with live trade data from auto-strategy VM engine
-  if (d.spotPrice)   { try { q('spot').textContent = parseFloat(d.spotPrice).toFixed(2); } catch(_){} }
-  if (d.optionPrice) { try { q('opt-ltp').textContent = `₹${parseFloat(d.optionPrice).toFixed(2)}`; } catch(_){} }
-  if (d.instr)       { try { q('instr-lbl').textContent = `${d.instr.strike}${d.instr.type} ${d.instr.expiry}`; } catch(_){} }
+  // Safely update Monitor tab with live auto-strategy trade data
+  const safe = (id, fn) => { try { const el=q(id); if(el) fn(el); } catch(_){} };
+  if (d.spotPrice)   safe('spot',      el => el.textContent = parseFloat(d.spotPrice).toFixed(2));
+  if (d.optionPrice) safe('opt-ltp',   el => el.textContent = `₹${parseFloat(d.optionPrice).toFixed(2)}`);
+  if (d.instr)       safe('instr-lbl', el => el.textContent = `${d.instr.strike}${d.instr.type} ${d.instr.expiry}`);
   if (d.entryPrice) {
-    try {
-      q('entry-px').textContent  = parseFloat(d.entryPrice).toFixed(2);
-      q('sl-level').textContent  = `₹${parseFloat(d.slLevel).toFixed(2)}`;
-      q('tgt-level').textContent = `₹${parseFloat(d.tgtLevel).toFixed(2)}`;
-      if (d.config) q('qty-lbl').textContent = `${d.config.lots * d.config.lotSize} (${d.config.lots} lot)`;
-      q('sltgt-card').style.display = 'block';
-      showSqOff(true);
-    } catch(_) {}
+    safe('entry-px',  el => el.textContent = parseFloat(d.entryPrice).toFixed(2));
+    safe('sl-level',  el => el.textContent = `₹${parseFloat(d.slLevel||0).toFixed(2)}`);
+    safe('tgt-level', el => el.textContent = `₹${parseFloat(d.tgtLevel||0).toFixed(2)}`);
+    if (d.config) safe('qty-lbl', el => el.textContent = `${d.config.lots * d.config.lotSize} (${d.config.lots} lot)`);
+    safe('sltgt-card', el => el.style.display = 'block');
+    try { showSqOff(true); } catch(_) {}
   }
   if (d.entryPrice && d.optionPrice) {
     try { setPnL(d.entryPrice, d.optionPrice); } catch(_) {}
   }
-  // Set status badge on Monitor tab
-  try { setStatus(d.status); } catch(_) {}
-  // Wire square off button to VM squareoff in auto mode
-  if (d.status === 'live') {
+  try { if (typeof setStatus === 'function') setStatus(d.status); } catch(_) {}
+  // Merge VM log entries into app log tab
+  if (Array.isArray(d.log)) {
     try {
-      const sqBtn = q('btn-squareoff');
-      if (sqBtn) sqBtn.onclick = () => {
-        if (confirm('Square off auto-strategy position on VM?')) {
-          fetch(engineUrl() + '/engine/squareoff', { method:'POST' })
-            .then(r => r.json())
-            .then(d => lg(d.ok ? '🛑 VM square off triggered' : `❌ ${d.error}`, d.ok ? 'w' : 'e'))
-            .catch(e => lg(`Square off error: ${e.message}`, 'e'));
-        }
-      };
+      const seen = new Set(ST.events.map(e => e.t + e.msg));
+      const fresh = d.log.filter(e => !seen.has(e.t + e.msg));
+      if (fresh.length) { ST.events = [...fresh, ...ST.events].slice(0, 200); renderLog(); }
     } catch(_) {}
-  }
-  // Merge VM log into app log
-  if (d.log?.length) {
-    const seen = new Set(ST.events.map(e => e.t + e.msg));
-    const fresh = d.log.filter(e => !seen.has(e.t + e.msg));
-    if (fresh.length) { ST.events = [...fresh, ...ST.events].slice(0, 200); renderLog(); }
   }
 }
   const el = q('auto-vm-cards');
@@ -2606,11 +2591,10 @@ function seShowConflicts(issues){
   items.innerHTML=issues.map(iss=>`<div class="cf-item"><span>${iss.icon}</span><span>${iss.msg}</span></div>`).join('');
 }
 
-// ── Init auto module ──────────────────────────────
-loadAutoSlots();
-renderAutoSlots();
-// Start polling VM for slot status on load (if connected)
-if (typeof engineUrl === 'function' && localStorage.getItem('nt3')) {
+// ── Init auto module (deferred — runs after main init) ───
+function initAutoModule() {
+  try { loadAutoSlots(); } catch(_) {}
+  try { renderAutoSlots(); } catch(_) {}
   try {
     const saved = JSON.parse(localStorage.getItem('nt3') || '{}');
     if (saved.workerUrl && saved.accessToken) startAutoVmPoll();
