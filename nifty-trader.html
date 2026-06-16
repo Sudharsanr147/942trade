@@ -616,8 +616,16 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <div id="auto-slot-list">
       <div style="text-align:center;padding:28px;color:var(--dim);font-size:12px">No auto-strategy slots yet.<br>Tap + New Slot to create one.</div>
     </div>
-    <!-- Slot status from VM -->
+    <!-- VM slot status cards -->
     <div id="auto-vm-cards" style="margin-top:12px"></div>
+    <!-- VM execution log -->
+    <div id="auto-log-section" style="display:none;margin-top:10px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <span>VM Execution Log</span>
+        <button onclick="q('auto-log-section').style.display='none'" style="background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer">Hide</button>
+      </div>
+      <div id="auto-vm-log"></div>
+    </div>
   </div>
 
   <!-- ┌─────────────────────────────────────────────┐
@@ -2003,13 +2011,98 @@ function startAutoVmPoll() {
 async function fetchAutoVmStatus() {
   if (!ST.workerUrl) return;
   try {
-    const r = await fetch(engineUrl() + '/engine/slots/status');
-    const d = await r.json();
-    if (d.ok) renderVmSlotStatus(d.slots, d.engineStatus);
+    // Fetch both slot status AND engine status in parallel
+    const [sr, er] = await Promise.all([
+      fetch(engineUrl() + '/engine/slots/status'),
+      fetch(engineUrl() + '/engine/status')
+    ]);
+    const sd = await sr.json();
+    const ed = await er.json();
+
+    if (sd.ok) renderVmSlotStatus(sd.slots, sd.engineStatus);
+    if (ed.ok) {
+      // Show VM log in Auto tab
+      renderAutoLog(ed.log, sd.slots);
+      // If trade is live from auto-strategy, update Monitor tab
+      if (['live','placed','exiting'].includes(ed.status)) {
+        updateMonitorFromVm(ed);
+      }
+    }
   } catch(_) {}
 }
 
-function renderVmSlotStatus(vmSlots, engStatus) {
+function renderAutoLog(logEntries, slots) {
+  if (!logEntries?.length) return;
+  const section = q('auto-log-section');
+  const el      = q('auto-vm-log');
+  if (!section || !el) return;
+
+  // Show log if any slot was placed, else only show last 60s
+  const anyPlaced = slots?.some(s => s.status === 'placed');
+  const now = Date.now();
+  const entries = anyPlaced
+    ? logEntries                    // full log for placed trades
+    : logEntries.filter(e => {      // last 90s only for skipped/checking
+        try {
+          const [h,m,s] = e.t.split(':').map(Number);
+          const tMs = (h*3600+m*60+s)*1000;
+          const nowMs= (new Date().getHours()*3600+new Date().getMinutes()*60+new Date().getSeconds())*1000;
+          return Math.abs(nowMs - tMs) < 90000;
+        } catch(_) { return true; }
+      });
+
+  if (!entries.length) return;
+  section.style.display = 'block';
+  const colMap = { s:'var(--green)', e:'var(--red)', w:'var(--amber)', i:'var(--blue)' };
+  el.innerHTML = entries.map(e => `
+    <div style="display:flex;gap:8px;padding:5px 10px;background:var(--s2);border-radius:5px;
+      border-left:2px solid ${colMap[e.type]||'var(--bdr)'};font-size:11px;margin-bottom:3px">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap;min-width:56px">${e.t}</span>
+      <span style="color:var(--txt)">${e.msg}</span>
+    </div>`).join('');
+}
+
+function updateMonitorFromVm(d) {
+  // Update Monitor tab with live trade data from auto-strategy VM engine
+  if (d.spotPrice)   { try { q('spot').textContent = parseFloat(d.spotPrice).toFixed(2); } catch(_){} }
+  if (d.optionPrice) { try { q('opt-ltp').textContent = `₹${parseFloat(d.optionPrice).toFixed(2)}`; } catch(_){} }
+  if (d.instr)       { try { q('instr-lbl').textContent = `${d.instr.strike}${d.instr.type} ${d.instr.expiry}`; } catch(_){} }
+  if (d.entryPrice) {
+    try {
+      q('entry-px').textContent  = parseFloat(d.entryPrice).toFixed(2);
+      q('sl-level').textContent  = `₹${parseFloat(d.slLevel).toFixed(2)}`;
+      q('tgt-level').textContent = `₹${parseFloat(d.tgtLevel).toFixed(2)}`;
+      if (d.config) q('qty-lbl').textContent = `${d.config.lots * d.config.lotSize} (${d.config.lots} lot)`;
+      q('sltgt-card').style.display = 'block';
+      showSqOff(true);
+    } catch(_) {}
+  }
+  if (d.entryPrice && d.optionPrice) {
+    try { setPnL(d.entryPrice, d.optionPrice); } catch(_) {}
+  }
+  // Set status badge on Monitor tab
+  try { setStatus(d.status); } catch(_) {}
+  // Wire square off button to VM squareoff in auto mode
+  if (d.status === 'live') {
+    try {
+      const sqBtn = q('btn-squareoff');
+      if (sqBtn) sqBtn.onclick = () => {
+        if (confirm('Square off auto-strategy position on VM?')) {
+          fetch(engineUrl() + '/engine/squareoff', { method:'POST' })
+            .then(r => r.json())
+            .then(d => lg(d.ok ? '🛑 VM square off triggered' : `❌ ${d.error}`, d.ok ? 'w' : 'e'))
+            .catch(e => lg(`Square off error: ${e.message}`, 'e'));
+        }
+      };
+    } catch(_) {}
+  }
+  // Merge VM log into app log
+  if (d.log?.length) {
+    const seen = new Set(ST.events.map(e => e.t + e.msg));
+    const fresh = d.log.filter(e => !seen.has(e.t + e.msg));
+    if (fresh.length) { ST.events = [...fresh, ...ST.events].slice(0, 200); renderLog(); }
+  }
+}
   const el = q('auto-vm-cards');
   if (!vmSlots?.length) { el.innerHTML = ''; return; }
   const slbl = { idle:'IDLE', waiting:'WAITING', checking:'CHECKING CONDITIONS', placing:'PLACING…', placed:'✅ PLACED', skipped:'🚫 SKIPPED', error:'❌ ERROR', passed:'PASSED' };
