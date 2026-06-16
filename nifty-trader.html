@@ -399,7 +399,14 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <button class="btn btn-ghost" id="btn-save">Save Settings</button>
     <button class="btn btn-danger" id="btn-clear">Clear All Saved Data</button>
 
-  </div>
+    <!-- Storage debug -->
+    <div style="margin-top:12px;text-align:center">
+      <button onclick="checkStorage()"
+        style="background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;text-decoration:underline">
+        🔍 Check what's in storage
+      </button>
+    </div>
+    <div id="storage-debug" style="display:none;margin-top:8px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--dim)"></div>
 
   <!-- ┌─────────────────────────────────────────────┐
        │  STRATEGY TAB                               │
@@ -750,6 +757,37 @@ function persist() {
 
 function restore() {
   try { Object.assign(ST, JSON.parse(localStorage.getItem('nt3') || '{}')); } catch(_) {}
+}
+
+function checkStorage() {
+  const el = q('storage-debug');
+  el.style.display = 'block';
+  const raw = localStorage.getItem('nt3');
+  if (!raw) {
+    el.innerHTML = '<span style="color:var(--red)">❌ Key "nt3" NOT in localStorage — data is genuinely missing in this browser/app context. Re-enter your settings manually and tap Save.</span>';
+    return;
+  }
+  try {
+    const d = JSON.parse(raw);
+    el.innerHTML = `<span style="color:var(--green)">✅ Found in localStorage:</span><br><br>`
+      + `<b>workerUrl:</b> ${d.workerUrl||'(empty)'}<br>`
+      + `<b>apiKey:</b> ${d.apiKey ? d.apiKey.slice(0,8)+'...' : '(empty)'}<br>`
+      + `<b>apiSecret:</b> ${d.apiSecret ? '✓ set' : '(empty)'}<br>`
+      + `<b>accessToken:</b> ${d.accessToken ? '✓ set' : '(empty)'}<br>`
+      + `<br><button onclick="recoverStorage()" style="background:var(--purple);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer">↩ Reload fields from storage</button>`;
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+  }
+}
+
+function recoverStorage() {
+  restore();
+  q('worker-url').value = ST.workerUrl || '';
+  q('api-key').value    = ST.apiKey    || '';
+  q('api-secret').value = ST.apiSecret || '';
+  if (ST.accessToken) setConn(true);
+  updateProxyIndicator();
+  q('storage-debug').innerHTML += '<br><span style="color:var(--green)">✅ Fields reloaded!</span>';
 }
 
 /* ════════════════════════════════════════════════════
