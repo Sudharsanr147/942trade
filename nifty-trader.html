@@ -2088,6 +2088,7 @@ function updateMonitorFromVm(d) {
     } catch(_) {}
   }
 }
+function renderVmSlotStatus(vmSlots, engStatus) {
   const el = q('auto-vm-cards');
   if (!vmSlots?.length) { el.innerHTML = ''; return; }
   const slbl = { idle:'IDLE', waiting:'WAITING', checking:'CHECKING CONDITIONS', placing:'PLACING…', placed:'✅ PLACED', skipped:'🚫 SKIPPED', error:'❌ ERROR', passed:'PASSED' };
