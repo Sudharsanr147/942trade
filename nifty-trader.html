@@ -321,7 +321,8 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 .cond-row select:focus{border-color:var(--purple)}
 .cond-row select.cts{color:var(--blue)}.cond-row select.cop{color:var(--amber);width:42px}
 .cond-row input.cpts{background:var(--s3);border:1px solid var(--bdr);border-radius:4px;padding:4px 5px;color:var(--amber);font-family:var(--mono);font-size:11px;width:50px;text-align:center;outline:none}
-.csep{font-size:10px;color:var(--dim);white-space:nowrap}
+.cdrag{color:var(--dim);font-size:14px;cursor:grab;padding:0 3px;touch-action:none;user-select:none;-webkit-user-select:none;flex-shrink:0}
+.cdrag:active{cursor:grabbing;color:var(--purple)}
 .cdel{background:none;border:none;color:var(--dim);font-size:12px;cursor:pointer;margin-left:auto;padding:0 2px}
 .cdel:hover{color:var(--red)}
 /* Conflict panel */
@@ -2166,9 +2167,88 @@ function seAddCond(sid)  { const s=seEditSets.find(x=>x.id===sid);if(!s)return;s
 function seRemCond(sid,cid){ const s=seEditSets.find(x=>x.id===sid);if(s){s.conditions=s.conditions.filter(c=>c.id!==cid);seRenderSets();} }
 function seUpdCond(sid,cid,f,v){ const s=seEditSets.find(x=>x.id===sid);if(!s)return;const c=s.conditions.find(x=>x.id===cid);if(!c)return;c[f]=v;if(f==='rightType')seRenderSets(); }
 
+// ── Condition move/duplicate ──────────────────────
+function seMoveCond(sid, cid, dir) {
+  const s = seEditSets.find(x => x.id === sid);
+  if (!s) return;
+  const i = s.conditions.findIndex(c => c.id === cid);
+  const j = i + dir;
+  if (j < 0 || j >= s.conditions.length) return;
+  [s.conditions[i], s.conditions[j]] = [s.conditions[j], s.conditions[i]];
+  seRenderSets();
+}
+
+function seDupCond(sid, cid) {
+  const s = seEditSets.find(x => x.id === sid);
+  if (!s) return;
+  const i = s.conditions.findIndex(c => c.id === cid);
+  if (i === -1) return;
+  const copy = { ...s.conditions[i], id: `c_${Date.now()}` };
+  s.conditions.splice(i + 1, 0, copy);
+  seRenderSets();
+}
+
+// ── Touch drag-to-reorder for conditions ──────────
+const CDR = { on:false, sid:null, cid:null, el:null, target:null, before:false };
+
+function condDragStart(e, sid, cid) {
+  e.stopPropagation();
+  const el = document.getElementById('cr-' + cid);
+  if (!el) return;
+  Object.assign(CDR, { on:true, sid, cid, el, target:null });
+  el.style.opacity = '0.45';
+  el.style.borderColor = 'var(--purple)';
+}
+
+document.addEventListener('touchmove', e => {
+  if (!CDR.on) return;
+  e.preventDefault();
+  const y = e.touches[0].clientY;
+  // Clear previous indicators
+  document.querySelectorAll('.cond-row').forEach(r => {
+    r.style.borderTop = ''; r.style.borderBottom = '';
+  });
+  // Find row under finger (excluding dragged row)
+  document.querySelectorAll('.cond-row').forEach(r => {
+    if (r.id === 'cr-' + CDR.cid) return;
+    const rect = r.getBoundingClientRect();
+    if (y >= rect.top - 4 && y <= rect.bottom + 4) {
+      CDR.target = r.dataset.cid;
+      CDR.before = y < rect.top + rect.height / 2;
+      if (CDR.before) r.style.borderTop    = '2px solid var(--purple)';
+      else            r.style.borderBottom = '2px solid var(--purple)';
+    }
+  });
+}, { passive: false });
+
+document.addEventListener('touchend', () => {
+  if (!CDR.on) return;
+  // Reset visuals
+  if (CDR.el) { CDR.el.style.opacity = ''; CDR.el.style.borderColor = ''; }
+  document.querySelectorAll('.cond-row').forEach(r => {
+    r.style.borderTop = ''; r.style.borderBottom = '';
+  });
+  // Perform reorder
+  if (CDR.target && CDR.target !== CDR.cid) {
+    const s = seEditSets.find(x => x.id === CDR.sid);
+    if (s) {
+      const from = s.conditions.findIndex(c => c.id === CDR.cid);
+      let   to   = s.conditions.findIndex(c => c.id === CDR.target);
+      if (from !== -1 && to !== -1) {
+        const [removed] = s.conditions.splice(from, 1);
+        to = s.conditions.findIndex(c => c.id === CDR.target); // recalc after splice
+        s.conditions.splice(CDR.before ? to : to + 1, 0, removed);
+        seRenderSets();
+      }
+    }
+  }
+  Object.assign(CDR, { on:false, sid:null, cid:null, el:null, target:null });
+});
+
+// ── Render condition sets ─────────────────────────
 function seRenderSets() {
   const el = q('se-cset-list');
-  el.innerHTML = seEditSets.map((set,si) => `
+  el.innerHTML = seEditSets.map((set, si) => `
     <div class="cset ${seCondFlags[set.id]?'cerr':''}">
       <div class="cset-hdr">
         <span style="font-size:10px;color:var(--dim);font-family:var(--mono)">${si+1}</span>
@@ -2190,9 +2270,12 @@ function seRenderSets() {
         </div>
       </div>
       <div class="cset-body">
-        ${set.conditions.map((c,ci) => {
+        ${set.conditions.map((c, ci) => {
           const cf = seCondFlags[c.id];
-          return `<div class="cond-row ${cf?'cerr':''}">
+          const isFirst = ci === 0, isLast = ci === set.conditions.length - 1;
+          return `<div class="cond-row ${cf?'cerr':''}" id="cr-${c.id}" data-cid="${c.id}">
+            <!-- drag handle -->
+            <span class="cdrag" ontouchstart="condDragStart(event,'${set.id}','${c.id}')" title="Drag to reorder">⠿</span>
             <input type="checkbox" ${c.enabled?'checked':''} style="accent-color:var(--purple);width:12px;height:12px;cursor:pointer"
               onchange="seUpdCond('${set.id}','${c.id}','enabled',this.checked)">
             <span class="csep" style="font-size:9px">${ci+1}</span>
@@ -2211,15 +2294,24 @@ function seRenderSets() {
             <input class="cpts" type="number" value="${c.offsetPts||0}" onchange="seUpdCond('${set.id}','${c.id}','offsetPts',this.value)" title="Offset pts">
             <span class="csep" style="font-size:9px">pts</span>
             ${cf?`<span style="font-size:12px">${cf==='impossible'?'🚫':'⚡'}</span>`:''}
-            <button class="cdel" onclick="seRemCond('${set.id}','${c.id}')">✕</button>
+            <!-- per-condition actions -->
+            <div style="display:flex;gap:2px;margin-left:auto;align-items:center">
+              ${!isFirst?`<button class="ib" onclick="seMoveCond('${set.id}','${c.id}',-1)" title="Move up" style="font-size:11px">↑</button>`:''}
+              ${!isLast ?`<button class="ib" onclick="seMoveCond('${set.id}','${c.id}',1)"  title="Move down" style="font-size:11px">↓</button>`:''}
+              <button class="ib" onclick="seDupCond('${set.id}','${c.id}')" title="Duplicate" style="font-size:11px">⧉</button>
+              <button class="cdel" onclick="seRemCond('${set.id}','${c.id}')">✕</button>
+            </div>
           </div>`;
         }).join('')}
-        <button onclick="seAddCond('${set.id}')" style="display:block;width:100%;padding:7px;background:rgba(124,92,255,.08);color:var(--purple);border:1px dashed rgba(124,92,255,.3);border-radius:5px;font-size:11px;cursor:pointer;margin-top:4px">+ Add Condition</button>
+        <button onclick="seAddCond('${set.id}')"
+          style="display:block;width:100%;padding:7px;background:rgba(124,92,255,.08);color:var(--purple);border:1px dashed rgba(124,92,255,.3);border-radius:5px;font-size:11px;cursor:pointer;margin-top:4px">
+          + Add Condition
+        </button>
       </div>
     </div>`).join('');
 }
 
-// ── Conflict Detection ────────────────────────────
+// ── Conflict Detection (no inter-set check) ───────
 const SE_OHLC_ALWAYS = [
   {f1:'high',rel:'>=',f2:'low'},{f1:'high',rel:'>=',f2:'open'},{f1:'high',rel:'>=',f2:'close'},{f1:'high',rel:'>=',f2:'mid'},
   {f1:'low',rel:'<=',f2:'high'},{f1:'low',rel:'<=',f2:'open'},{f1:'low',rel:'<=',f2:'close'},{f1:'low',rel:'<=',f2:'mid'},
@@ -2278,13 +2370,15 @@ function seDescCond(c,i){
   return `Cond ${i+1}: ${c.leftTime} ${c.leftField} ${c.op} ${r}${off?(off>0?'+':'')+off+'pts':''}`;
 }
 
+// Only checks: (1) absolute impossibility  (2) intra-set contradiction in ALL sets
+// No inter-set mutual exclusivity — sets are priority-ordered, first true wins
 function seValidate(){
   const issues=[], sets=seEditSets.filter(s=>s.enabled);
   seCondFlags={};
-  // 1. Absolute impossibility
   for(let si=0;si<sets.length;si++){
     const set=sets[si];
     const conds=(set.conditions||[]).filter(c=>c.enabled);
+    // 1. Absolute impossibility — single condition always false
     for(let ci=0;ci<conds.length;ci++){
       const reason=seAbsImpossible(conds[ci]);
       if(reason){
@@ -2292,39 +2386,15 @@ function seValidate(){
         seCondFlags[conds[ci].id]='impossible';
       }
     }
-    // 2. Intra-set contradiction (ALL only)
+    // 2. Intra-set contradiction — within ALL set, two conditions that can never coexist
     if(set.logic==='ALL'){
       for(let i=0;i<conds.length;i++) for(let j=i+1;j<conds.length;j++){
         if(seContradicts(conds[i],conds[j])){
-          issues.push({msg:`Set "${set.name||si+1}" (ALL): ${seDescCond(conds[i],i)} ✕ ${seDescCond(conds[j],j)} — cannot both be true`,icon:'⚡'});
+          issues.push({msg:`Set "${set.name||si+1}" (ALL): ${seDescCond(conds[i],i)} ✕ ${seDescCond(conds[j],j)} — cannot both be true simultaneously`,icon:'⚡'});
           seCondFlags[conds[i].id]='conflict'; seCondFlags[conds[j].id]='conflict';
         }
       }
     }
-  }
-  // 3. Inter-set mutual exclusivity
-  for(let i=0;i<sets.length;i++) for(let j=i+1;j<sets.length;j++){
-    const A=sets[i],B=sets[j];
-    const ca=(A.conditions||[]).filter(c=>c.enabled);
-    const cb=(B.conditions||[]).filter(c=>c.enabled);
-    if(!ca.length||!cb.length){
-      issues.push({msg:`Set "${A.name||i+1}" or "${B.name||j+1}" has no enabled conditions`,icon:'🔀'}); continue;
-    }
-    let exclusive=false,reason='';
-    if(A.logic==='ALL'&&B.logic==='ALL'){
-      exclusive=ca.some(a=>cb.some(b=>seContradicts(a,b)));
-      if(!exclusive) reason='No contradictory condition pair found — both sets could fire simultaneously';
-    } else if(A.logic==='ALL'&&B.logic==='ANY'){
-      exclusive=cb.every(b=>ca.some(a=>seContradicts(a,b)));
-      if(!exclusive) reason='Not every condition in the ANY set is contradicted by the ALL set';
-    } else if(A.logic==='ANY'&&B.logic==='ALL'){
-      exclusive=ca.every(a=>cb.some(b=>seContradicts(a,b)));
-      if(!exclusive) reason='Not every condition in the ANY set is contradicted by the ALL set';
-    } else {
-      exclusive=ca.every(a=>cb.every(b=>seContradicts(a,b)));
-      if(!exclusive) reason='ANY+ANY: every cross-pair must contradict — at least one pair can coexist';
-    }
-    if(!exclusive) issues.push({msg:`Sets "${A.name||i+1}" & "${B.name||j+1}" NOT mutually exclusive: ${reason}`,icon:'🔀'});
   }
   return issues;
 }
@@ -2340,7 +2410,7 @@ function seShowConflicts(issues){
   const items=q('slot-conflict-items');
   if(!issues.length){
     panel.className='show ok';
-    items.innerHTML='<div class="cf-item ok"><span>✅</span><span>All checks passed — conditions are consistent and sets are mutually exclusive.</span></div>';
+    items.innerHTML='<div class="cf-item ok"><span>✅</span><span>All checks passed — no impossible conditions or intra-set contradictions found.</span></div>';
     return;
   }
   panel.className='show';
@@ -2401,7 +2471,7 @@ if (typeof engineUrl === 'function' && localStorage.getItem('nt3')) {
     </div>
     <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px">Condition Sets</div>
     <div style="background:rgba(124,92,255,.05);border:1px solid rgba(124,92,255,.15);border-radius:var(--r);padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:10px">
-      Sets evaluated <b>top→bottom</b>. <b>First satisfied set</b> fires the trade in that direction. <b>No set satisfied → no trade.</b>
+      Sets evaluated <b>top→bottom in priority order</b>. <b>First satisfied set</b> fires the trade in that direction. <b>No set satisfied → no trade.</b> Use ↑/↓ on sets to change priority.
     </div>
     <div id="se-cset-list"></div>
     <button onclick="seAddSet()" style="display:block;width:100%;padding:9px;background:rgba(0,212,120,.06);color:var(--green);border:1px dashed rgba(0,212,120,.3);border-radius:var(--r);font-size:12px;cursor:pointer;margin-bottom:10px">+ Add Condition Set</button>
