@@ -2072,6 +2072,18 @@ async function fetchAutoVmStatus() {
   } catch(_) {}
 }
 
+function utcToIST(utcStr) {
+  // VM logs are in UTC — convert to IST (+5:30) for display
+  try {
+    const [h, m, s] = utcStr.split(':').map(Number);
+    const totSec = h * 3600 + m * 60 + s + 5.5 * 3600;
+    const hI = Math.floor(totSec / 3600) % 24;
+    const mI = Math.floor((totSec % 3600) / 60);
+    const sI = Math.floor(totSec % 60);
+    return `${String(hI).padStart(2,'0')}:${String(mI).padStart(2,'0')}:${String(sI).padStart(2,'0')}`;
+  } catch(_) { return utcStr; }
+}
+
 function renderAutoLog(logEntries, slots) {
   if (!logEntries?.length) return;
   const section = q('auto-log-section');
