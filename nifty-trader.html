@@ -2078,24 +2078,15 @@ function renderAutoLog(logEntries, slots) {
   const el      = q('auto-vm-log');
   if (!section || !el) return;
 
-  // Show log if any slot was placed, else only show last 60s
-  const anyPlaced = slots?.some(s => s.status === 'placed');
-  const now = Date.now();
-  const entries = anyPlaced
-    ? logEntries                    // full log for placed trades
-    : logEntries.filter(e => {      // last 90s only for skipped/checking
-        try {
-          const [h,m,s] = e.t.split(':').map(Number);
-          const tMs = (h*3600+m*60+s)*1000;
-          const nowMs= (new Date().getHours()*3600+new Date().getMinutes()*60+new Date().getSeconds())*1000;
-          return Math.abs(nowMs - tMs) < 90000;
-        } catch(_) { return true; }
-      });
+  // Show log whenever any slot has fired or is active
+  const anyFired = slots?.some(s =>
+    ['passed','skipped','placed','error','checking','placing'].includes(s.status)
+  );
+  if (!anyFired) return;
 
-  if (!entries.length) return;
   section.style.display = 'block';
   const colMap = { s:'var(--green)', e:'var(--red)', w:'var(--amber)', i:'var(--blue)' };
-  el.innerHTML = entries.map(e => `
+  el.innerHTML = logEntries.map(e => `
     <div style="display:flex;gap:8px;padding:5px 10px;background:var(--s2);border-radius:5px;
       border-left:2px solid ${colMap[e.type]||'var(--bdr)'};font-size:11px;margin-bottom:3px">
       <span style="font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap;min-width:56px">${e.t}</span>
