@@ -85,12 +85,12 @@ html,body {
 }
 .nb {
   flex:1; display:flex; flex-direction:column; align-items:center;
-  padding:9px 0 7px; gap:3px;
+  padding:7px 0 5px; gap:2px;
   background:none; border:none; color:var(--dim);
-  font-family:var(--sans); font-size:10px; font-weight:500;
-  letter-spacing:.02em; cursor:pointer; transition:color .15s;
+  font-family:var(--sans); font-size:9px; font-weight:500;
+  cursor:pointer; transition:color .15s;
 }
-.nb svg { width:19px; height:19px; stroke-width:1.8; }
+.nb svg { width:17px; height:17px; stroke-width:1.8; }
 .nb.on  { color:var(--blue); }
 
 /* ══════════════════════════════════════════════
@@ -337,6 +337,27 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 .lots-mode{display:flex;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:3px;margin-bottom:8px}
 .lots-mode button{flex:1;padding:7px;border:none;border-radius:6px;background:none;color:var(--dim);font-family:var(--sans);font-size:12px;cursor:pointer}
 .lots-mode button.on{background:var(--s3);color:var(--txt)}
+/* ── TRADE LOG STYLES ──────────────────────────────── */
+.tl-day{background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:8px;overflow:hidden}
+.tl-day-hdr{display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer;transition:background .15s}
+.tl-day-hdr:active{background:var(--s3)}
+.tl-day-lbl{font-size:13px;font-weight:600;font-family:var(--mono)}
+.tl-day-meta{display:flex;gap:6px;font-size:11px;flex:1}
+.tl-chevron{font-size:11px;color:var(--dim);margin-left:auto;flex-shrink:0;transition:transform .2s}
+.tl-day-body{border-top:1px solid var(--bdr)}
+.tl-slot-wrap{border-bottom:1px solid var(--bdr)}
+.tl-slot-wrap:last-child{border-bottom:none}
+.tl-slot-hdr{display:flex;align-items:center;gap:8px;padding:9px 14px 9px 20px;cursor:pointer;background:var(--bg);transition:background .15s}
+.tl-slot-hdr:active{background:var(--s3)}
+.tl-slot-lbl{font-size:12px;font-weight:500;flex:1}
+.tl-slot-time{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.tl-slot-status{font-family:var(--mono);font-size:10px;font-weight:700}
+.tl-slot-body{padding:8px 10px;background:var(--bg)}
+.tl-log-row{display:flex;gap:8px;padding:4px 8px;border-radius:4px;border-left:2px solid var(--bdr);font-size:11px;margin-bottom:3px;background:var(--s2)}
+.tl-log-row.s{border-left-color:var(--green)}.tl-log-row.e{border-left-color:var(--red)}
+.tl-log-row.w{border-left-color:var(--amber)}.tl-log-row.i{border-left-color:var(--blue)}
+.tl-log-t{font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap;min-width:54px;flex-shrink:0}
+.tl-log-msg{color:var(--txt);line-height:1.4}
 </style>
 </head>
 <body>
@@ -640,6 +661,27 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   </div>
 
   <!-- ┌─────────────────────────────────────────────┐
+       │  TRADE LOG TAB                              │
+       └─────────────────────────────────────────────┘ -->
+  <div class="tab" id="t-tradelog">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Trade Logs</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">Captured automatically · persists across sessions</div>
+      </div>
+      <button onclick="clearTradeLogs()"
+        style="background:none;border:1px solid var(--bdr);color:var(--dim);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
+        Clear All
+      </button>
+    </div>
+    <div id="tl-list">
+      <div style="text-align:center;padding:32px;color:var(--dim);font-size:12px">
+        No trade logs yet.<br>Logs are captured automatically when slots execute.
+      </div>
+    </div>
+  </div>
+
+  <!-- ┌─────────────────────────────────────────────┐
        │  LOG TAB                                    │
        └─────────────────────────────────────────────┘ -->
   <div class="tab" id="t-log">
@@ -672,7 +714,11 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
     Auto
   </button>
-  <button class="nb" id="nav-log"      onclick="go('log')">
+  <button class="nb" id="nav-tradelog" onclick="go('tradelog')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+    Trades
+  </button>
+  <button class="nb" id="nav-log" onclick="go('log')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
     Log
   </button>
@@ -2060,7 +2106,10 @@ async function fetchAutoVmStatus() {
     const sd = await sr.json();
     const ed = await er.json();
 
-    if (sd.ok) renderVmSlotStatus(sd.slots, sd.engineStatus);
+    if (sd.ok) {
+      checkAndCaptureLogs(sd.slots, ed.log||[], sd.engineStatus||'');
+      renderVmSlotStatus(sd.slots, sd.engineStatus);
+    }
     if (ed.ok) {
       // Show VM log in Auto tab
       renderAutoLog(ed.log, sd.slots);
@@ -2641,10 +2690,187 @@ function seShowConflicts(issues){
 function initAutoModule() {
   try { loadAutoSlots(); } catch(_) {}
   try { renderAutoSlots(); } catch(_) {}
+  try { loadTradeLogs(); renderTradeLogs(); } catch(_) {}
   try {
     const saved = JSON.parse(localStorage.getItem('nt3') || '{}');
     if (saved.workerUrl && saved.accessToken) startAutoVmPoll();
   } catch(_) {}
+}
+
+/* ════════════════════════════════════════════════════
+   TRADE LOG MODULE
+   Day → Slot → Log entries. Persists in localStorage.
+════════════════════════════════════════════════════ */
+let tradeLogs = {};
+const prevSlotStatus = {}; // slotId → last known status for change detection
+
+function loadTradeLogs() {
+  try { tradeLogs = JSON.parse(localStorage.getItem('trade_logs_v1') || '{}'); } catch(_) { tradeLogs = {}; }
+}
+function saveTradeLogs() {
+  try { localStorage.setItem('trade_logs_v1', JSON.stringify(tradeLogs)); } catch(e) {
+    // If storage full, remove oldest day
+    try {
+      const dates = Object.keys(tradeLogs).sort();
+      if (dates.length > 1) { delete tradeLogs[dates[0]]; localStorage.setItem('trade_logs_v1', JSON.stringify(tradeLogs)); }
+    } catch(_) {}
+  }
+}
+function getISTDate() {
+  const n = new Date(Date.now() + 5.5*3600000);
+  return `${n.getUTCFullYear()}-${String(n.getUTCMonth()+1).padStart(2,'0')}-${String(n.getUTCDate()).padStart(2,'0')}`;
+}
+
+function filterSlotLogs(slotName, allLogs) {
+  // Get log entries relevant to this slot
+  const prefix = `[Auto] "${slotName}"`;
+  const tradeKeys = ['Filled @','SL HIT','TGT HIT','Trade closed','Order placed',
+                     'Square off','Auto-exit','Armed →','candles','Deploy','Auto-lots',
+                     'Balance','Entry error','Entry time'];
+  return (allLogs||[]).filter(e =>
+    e.msg.startsWith(prefix) ||
+    tradeKeys.some(k => e.msg.includes(k))
+  );
+}
+
+function captureSlotLog(slot, status, allLogs) {
+  const date = getISTDate();
+  if (!tradeLogs[date]) tradeLogs[date] = {};
+  const existing = tradeLogs[date][slot.name];
+  const logs = filterSlotLogs(slot.name, allLogs);
+  tradeLogs[date][slot.name] = {
+    status,
+    entryTime: slot.entryTime,
+    exitTime:  slot.exitTime,
+    sets:      slot.sets || 0,
+    savedAt:   new Date(Date.now()+5.5*3600000).toUTCString().slice(17,25),
+    logs,
+  };
+  saveTradeLogs();
+  renderTradeLogs();
+  lg(`📋 Trade log saved: ${date}/${slot.name} (${status})`, 'i');
+}
+
+function appendExitToLog(allLogs) {
+  // Find today's most recent 'placed' slot and append exit log entries
+  const date = getISTDate();
+  if (!tradeLogs[date]) return;
+  const slots = tradeLogs[date];
+  const placedName = Object.keys(slots).reverse().find(n => slots[n].status === 'placed');
+  if (!placedName) return;
+  const slot = slots[placedName];
+  const exitKeys = ['SL HIT','TGT HIT','Trade closed','Square off','Auto-exit','P&L','Filled @'];
+  const exitLogs = (allLogs||[]).filter(e => exitKeys.some(k => e.msg.includes(k)));
+  const seen = new Set((slot.logs||[]).map(e => e.t+e.msg));
+  const fresh = exitLogs.filter(e => !seen.has(e.t+e.msg));
+  if (fresh.length) {
+    slot.logs = [...fresh, ...(slot.logs||[])];
+    saveTradeLogs();
+    renderTradeLogs();
+  }
+}
+
+// Called every poll cycle from fetchAutoVmStatus
+function checkAndCaptureLogs(vmSlots, logEntries, engineStatus) {
+  const prevEng = prevSlotStatus['__engine__'];
+  for (const slot of (vmSlots||[])) {
+    const prev = prevSlotStatus[slot.id];
+    const curr = slot.status;
+    if (prev !== undefined && prev !== curr) {
+      if (['placed','skipped','error'].includes(curr)) {
+        captureSlotLog(slot, curr, logEntries);
+      }
+    }
+    prevSlotStatus[slot.id] = curr;
+  }
+  // If engine just completed a trade, append exit details
+  if (prevEng && ['live','exiting'].includes(prevEng) &&
+      ['done','idle'].includes(engineStatus)) {
+    appendExitToLog(logEntries);
+  }
+  prevSlotStatus['__engine__'] = engineStatus;
+}
+
+// Render accordion
+function renderTradeLogs() {
+  const el = q('tl-list');
+  if (!el) return;
+  const dates = Object.keys(tradeLogs).sort().reverse();
+  if (!dates.length) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--dim);font-size:12px">No trade logs yet.<br>Logs captured automatically when slots execute.</div>';
+    return;
+  }
+  const colMap = {s:'var(--green)',e:'var(--red)',w:'var(--amber)',i:'var(--blue)'};
+  el.innerHTML = dates.map(date => {
+    const slots = tradeLogs[date]||{};
+    const names = Object.keys(slots).sort();
+    const nPlaced  = names.filter(n=>slots[n].status==='placed').length;
+    const nSkipped = names.filter(n=>slots[n].status==='skipped').length;
+    const nPassed  = names.filter(n=>slots[n].status==='passed').length;
+    return `
+      <div class="tl-day">
+        <div class="tl-day-hdr" onclick="tlToggleDay('${date}')">
+          <span class="tl-day-lbl">📅 ${date}</span>
+          <span class="tl-day-meta">
+            ${nPlaced  ? `<span style="color:var(--green)">${nPlaced} placed</span>` : ''}
+            ${nSkipped ? `<span style="color:var(--red)">${nSkipped} skip</span>` : ''}
+            ${nPassed  ? `<span style="color:var(--dim)">${nPassed} missed</span>` : ''}
+          </span>
+          <span class="tl-chevron" id="tlc-d-${date}">▶</span>
+        </div>
+        <div class="tl-day-body" id="tlb-d-${date}" style="display:none">
+          ${names.map(name => {
+            const slot = slots[name];
+            const sCol  = slot.status==='placed'?'var(--green)':slot.status==='skipped'?'var(--red)':slot.status==='error'?'var(--red)':'var(--dim)';
+            const sIcon = slot.status==='placed'?'✅':slot.status==='skipped'?'🚫':slot.status==='error'?'❌':'⏭️';
+            const sid   = `${date}__${name}`.replace(/[^a-zA-Z0-9_-]/g,'_');
+            return `
+              <div class="tl-slot-wrap">
+                <div class="tl-slot-hdr" onclick="tlToggleSlot('${sid}')">
+                  <span class="tl-slot-lbl">${sIcon} ${name}</span>
+                  <span class="tl-slot-time">${slot.entryTime}</span>
+                  <span class="tl-slot-status" style="color:${sCol}">${slot.status.toUpperCase()}</span>
+                  <span class="tl-chevron" id="tlc-s-${sid}">▶</span>
+                </div>
+                <div class="tl-slot-body" id="tlb-s-${sid}" style="display:none">
+                  <div style="padding:6px 0 4px;font-size:10px;color:var(--dim)">Saved at ${slot.savedAt||'?'} IST · ${(slot.logs||[]).length} entries</div>
+                  ${(slot.logs||[]).length
+                    ? (slot.logs).map(e =>
+                        `<div class="tl-log-row ${e.type||'i'}">
+                          <span class="tl-log-t">${e.t}</span>
+                          <span class="tl-log-msg">${e.msg}</span>
+                        </div>`).join('')
+                    : '<div style="padding:8px;color:var(--dim);font-size:11px">No log entries for this slot.</div>'
+                  }
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function tlToggleDay(date) {
+  const body = document.getElementById('tlb-d-' + date);
+  const chev = document.getElementById('tlc-d-' + date);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '▶' : '▼';
+}
+function tlToggleSlot(sid) {
+  const body = document.getElementById('tlb-s-' + sid);
+  const chev = document.getElementById('tlc-s-' + sid);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '▶' : '▼';
+}
+function clearTradeLogs() {
+  if (!confirm('Clear all trade logs? This cannot be undone.')) return;
+  tradeLogs = {};
+  saveTradeLogs();
+  renderTradeLogs();
 }
 
 // ── Start the app ─────────────────────────────────
