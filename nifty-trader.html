@@ -2760,11 +2760,32 @@ function filterSlotLogs(slotName, allLogs) {
   );
 }
 
+// Status priority — higher = more significant, never overwrite with lower
+const TL_PRIORITY = { placed:4, error:3, skipped:2, passed:1 };
+
 function captureSlotLog(slot, status, allLogs) {
-  const date = getISTDate();
+  const date     = getISTDate();
   if (!tradeLogs[date]) tradeLogs[date] = {};
   const existing = tradeLogs[date][slot.name];
-  const logs = filterSlotLogs(slot.name, allLogs);
+  const newPri   = TL_PRIORITY[status]          || 0;
+  const existPri = TL_PRIORITY[existing?.status] || 0;
+  const logs     = filterSlotLogs(slot.name, allLogs);
+
+  if (existing && existPri > newPri) {
+    // Don't downgrade status (e.g. placed → skipped after re-evaluation)
+    // Just merge any new log entries
+    const seen  = new Set((existing.logs||[]).map(e => e.t + e.msg));
+    const fresh = logs.filter(e => !seen.has(e.t + e.msg));
+    if (fresh.length) {
+      existing.logs = [...(existing.logs||[]), ...fresh]
+        .sort((a,b) => (a.t > b.t ? -1 : 1)); // newest first
+      saveTradeLogs();
+      renderTradeLogs();
+    }
+    return; // keep the higher status
+  }
+
+  // New status is equal or higher priority — write/overwrite
   tradeLogs[date][slot.name] = {
     status,
     entryTime: slot.entryTime,
