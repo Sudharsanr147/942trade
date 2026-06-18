@@ -2299,6 +2299,7 @@ function openSlotEditor(id) {
     q('se-lotsize').value = slot.lotSize;
     q('se-lotsize2').value= slot.lotSize;
     q('se-deploy').value  = slot.deployPct || 90;
+    q('se-floor-premium').value = slot.floorPremium || 0;
     seEditSets = (slot.conditionSets||[]).map(cs => ({
       ...cs, conditions: (cs.conditions||[]).map(c => ({...c}))
     }));
@@ -2310,6 +2311,26 @@ function openSlotEditor(id) {
   }
   seRenderSets();
   q('slot-modal-overlay').classList.add('open');
+}
+
+function seUpdateFloorCalc() {
+  const floor    = parseFloat(q('se-floor-premium').value) || 0;
+  const deployPc = parseFloat(q('se-deploy').value) || 90;
+  const lotSz    = parseFloat(q('se-lotsize2').value) || 65;
+  const calcEl   = q('se-floor-calc');
+  if (!calcEl) return;
+  if (floor <= 0) {
+    calcEl.style.display = 'none';
+    calcEl.textContent   = '';
+    return;
+  }
+  const bal      = 20000;
+  const deployAmt = bal * deployPc / 100;
+  const lots     = Math.floor(deployAmt / (floor * lotSz));
+  calcEl.style.display = 'block';
+  calcEl.textContent   =
+    `Example (₹${bal.toLocaleString('en-IN')}, ${deployPc}% deploy): ` +
+    `floor(${deployAmt.toLocaleString('en-IN')} ÷ ${floor}×${lotSz}) = ${lots} lot${lots!==1?'s':''}`;
 }
 
 function closeSlotEditor() { q('slot-modal-overlay').classList.remove('open'); seCondFlags = {}; }
@@ -2344,6 +2365,7 @@ function saveSlot() {
     lotSize:   parseInt(seAutoLots ? q('se-lotsize2').value : q('se-lotsize').value) || 65,
     autoLots:  seAutoLots,
     deployPct: parseInt(q('se-deploy').value) || 90,
+    floorPremium: parseFloat(q('se-floor-premium').value) || 0,
     conditionSets: seEditSets.map(cs => ({ ...cs, conditions: cs.conditions.map(c => ({...c})) })),
   };
   if (isNew) autoSlots.push(slot);
@@ -3199,9 +3221,25 @@ document.addEventListener('DOMContentLoaded', init);
       <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lots</label><input id="se-lots" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
       <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize" type="number" value="65" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
     </div>
-    <div id="se-lots-auto" style="display:none;grid-template-columns:1fr 1fr;gap:8px">
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Deploy % of balance</label><input id="se-deploy" type="number" value="90" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize2" type="number" value="65" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    <div id="se-lots-auto" style="display:none;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Deploy % of balance</label><input id="se-deploy" type="number" value="90" oninput="seUpdateFloorCalc()" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize2" type="number" value="65" oninput="seUpdateFloorCalc()" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      </div>
+      <!-- Floor Premium -->
+      <div style="margin-top:8px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px">
+        <label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">
+          Floor Premium ₹ <span style="color:var(--amber);font-size:10px">optional</span>
+        </label>
+        <input id="se-floor-premium" type="number" min="0" value="0" placeholder="0 = disabled"
+          oninput="seUpdateFloorCalc()"
+          style="width:100%;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r);padding:9px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;margin-bottom:8px">
+        <div id="se-floor-hint" style="font-size:11px;color:var(--dim);line-height:1.6">
+          When actual instrument price &lt; floor, <b>floor</b> is used for lot sizing (conservative).<br>
+          e.g. Deploy 95% of ₹20,000, floor ₹60, lot size 65 → <b style="color:var(--txt)">floor(19000 ÷ 3900) = 4 lots</b>
+        </div>
+        <div id="se-floor-calc" style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--purple);display:none"></div>
+      </div>
     </div>
     <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px">Condition Sets</div>
     <div style="background:rgba(124,92,255,.05);border:1px solid rgba(124,92,255,.15);border-radius:var(--r);padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:10px">
