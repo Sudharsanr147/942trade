@@ -2770,16 +2770,27 @@ function getISTDate() {
   return `${n.getUTCFullYear()}-${String(n.getUTCMonth()+1).padStart(2,'0')}-${String(n.getUTCDate()).padStart(2,'0')}`;
 }
 
-function filterSlotLogs(slotName, allLogs) {
-  // Get log entries relevant to this slot
-  const prefix = `[Auto] "${slotName}"`;
-  const tradeKeys = ['Filled @','SL HIT','TGT HIT','Trade closed','Order placed',
-                     'Square off','Auto-exit','Armed →','candles','Deploy','Auto-lots',
-                     'Balance','Entry error','Entry time'];
-  return (allLogs||[]).filter(e =>
-    e.msg.startsWith(prefix) ||
-    tradeKeys.some(k => e.msg.includes(k))
-  );
+function filterSlotLogs(slotName, allLogs, entryTime, exitTime) {
+  const prefix  = `[Auto] "${slotName}"`;
+  const anyAuto = /^\[Auto\] "/; // matches [Auto] "anySlot" — used to exclude other slots
+  const toSec   = t => {
+    try { const [h,m,s='0'] = (t||'').split(':'); return +h*3600 + +m*60 + +s; }
+    catch(_) { return 0; }
+  };
+  // Time window: 2 min before entry → 5 min after exit (covers fill confirmation lag)
+  const startSec = toSec(entryTime) - 120;
+  const endSec   = toSec(exitTime || '15:35:00') + 300;
+
+  return (allLogs||[]).filter(e => {
+    // Always include this slot's own condition evaluation entries
+    if (e.msg.startsWith(prefix)) return true;
+    // Always exclude other slots' [Auto] "xxx" entries
+    if (anyAuto.test(e.msg)) return false;
+    // For trade execution entries (Filled, SL HIT, Square off etc.)
+    // include only if they fall within this slot's time window
+    const tSec = toSec(e.t);
+    return tSec >= startSec && tSec <= endSec;
+  });
 }
 
 // Status priority — higher = more significant, never overwrite with lower
@@ -2791,23 +2802,22 @@ function captureSlotLog(slot, status, allLogs) {
   const existing = tradeLogs[date][slot.name];
   const newPri   = TL_PRIORITY[status]          || 0;
   const existPri = TL_PRIORITY[existing?.status] || 0;
-  const logs     = filterSlotLogs(slot.name, allLogs);
+  // Use time-windowed filtering so other slots' entries don't bleed in
+  const logs = filterSlotLogs(slot.name, allLogs, slot.entryTime, slot.exitTime);
 
   if (existing && existPri > newPri) {
-    // Don't downgrade status (e.g. placed → skipped after re-evaluation)
-    // Just merge any new log entries
+    // Don't downgrade status — just merge any new entries within this slot's window
     const seen  = new Set((existing.logs||[]).map(e => e.t + e.msg));
     const fresh = logs.filter(e => !seen.has(e.t + e.msg));
     if (fresh.length) {
       existing.logs = [...(existing.logs||[]), ...fresh]
-        .sort((a,b) => (a.t > b.t ? -1 : 1)); // newest first
+        .sort((a,b) => (a.t > b.t ? -1 : 1));
       saveTradeLogs();
       renderTradeLogs();
     }
-    return; // keep the higher status
+    return;
   }
 
-  // New status is equal or higher priority — write/overwrite
   tradeLogs[date][slot.name] = {
     status,
     entryTime: slot.entryTime,
@@ -2822,19 +2832,20 @@ function captureSlotLog(slot, status, allLogs) {
 }
 
 function appendExitToLog(allLogs) {
-  // Find today's most recent 'placed' slot and append exit log entries
+  // Append exit entries to the most recently placed slot, using time window
   const date = getISTDate();
   if (!tradeLogs[date]) return;
-  const slots = tradeLogs[date];
+  const slots     = tradeLogs[date];
   const placedName = Object.keys(slots).reverse().find(n => slots[n].status === 'placed');
   if (!placedName) return;
-  const slot = slots[placedName];
-  const exitKeys = ['SL HIT','TGT HIT','Trade closed','Square off','Auto-exit','P&L','Filled @'];
-  const exitLogs = (allLogs||[]).filter(e => exitKeys.some(k => e.msg.includes(k)));
-  const seen = new Set((slot.logs||[]).map(e => e.t+e.msg));
-  const fresh = exitLogs.filter(e => !seen.has(e.t+e.msg));
+  const slot    = slots[placedName];
+  const fresh   = filterSlotLogs(placedName, allLogs, slot.entryTime, slot.exitTime)
+    .filter(e => {
+      const seen = new Set((slot.logs||[]).map(x => x.t + x.msg));
+      return !seen.has(e.t + e.msg);
+    });
   if (fresh.length) {
-    slot.logs = [...fresh, ...(slot.logs||[])];
+    slot.logs = [...(slot.logs||[]), ...fresh].sort((a,b) => a.t > b.t ? -1 : 1);
     saveTradeLogs();
     renderTradeLogs();
   }
@@ -2843,16 +2854,26 @@ function appendExitToLog(allLogs) {
 // Called every poll cycle from fetchAutoVmStatus
 function checkAndCaptureLogs(vmSlots, logEntries, engineStatus) {
   const prevEng = prevSlotStatus['__engine__'];
+  const today   = getISTDate();
+
   for (const slot of (vmSlots||[])) {
     const prev = prevSlotStatus[slot.id];
     const curr = slot.status;
-    if (prev !== undefined && prev !== curr) {
-      if (['placed','skipped','error'].includes(curr)) {
+
+    if (['placed','skipped','error'].includes(curr)) {
+      const alreadyLogged = tradeLogs[today]?.[slot.name];
+
+      if (prev !== undefined && prev !== curr) {
+        // Normal status transition — capture
+        captureSlotLog(slot, curr, logEntries);
+      } else if (prev === undefined && !alreadyLogged) {
+        // App reconnected after slot fired — capture if not yet logged today
         captureSlotLog(slot, curr, logEntries);
       }
     }
     prevSlotStatus[slot.id] = curr;
   }
+
   // If engine just completed a trade, append exit details
   if (prevEng && ['live','exiting'].includes(prevEng) &&
       ['done','idle'].includes(engineStatus)) {
