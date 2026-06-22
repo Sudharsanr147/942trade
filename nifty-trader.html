@@ -644,6 +644,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         <div style="font-size:11px;color:var(--dim);margin-top:2px" id="auto-vm-status">Slots push to VM on login</div>
       </div>
       <button onclick="openSlotEditor(null)" style="background:var(--purple);border:none;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">+ New Slot</button>
+      <button onclick="addDipBuySlots()" style="background:var(--s3);border:1px solid var(--purple);color:var(--txt);padding:7px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">+ Dip-Buy Slots</button>
     </div>
     <button id="btn-push-auto" onclick="manualPushToVM()"
       style="display:block;width:100%;padding:11px;background:rgba(0,212,120,.08);color:var(--green);border:1px solid rgba(0,212,120,.25);border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px">
@@ -2382,6 +2383,45 @@ function deleteSlotFromEditor() {
   saveAutoSlots(); renderAutoSlots(); closeSlotEditor();
 }
 
+// ── 120-MA Dip-Buy / Pop-Fade slots ──────────────────────────────
+// Rule: spot ABOVE 120-MA + last 5-min dip -> BUY CE ; spot BELOW + 5-min pop -> BUY PE.
+// Symmetric premium bracket (TGT 5 / SL 5). Added DISABLED — enable the few you want.
+function addDipBuySlots() {
+  const addMin = (t, d) => { const [h, m] = t.split(':').map(Number); const x = h * 60 + m + d; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+  const MA = 'ema120';   // change to 'sma120' if you prefer the simple average
+  const checkpoints = ['10:20','10:35','12:05','12:20','13:05','13:20','14:05'];
+  let added = 0;
+  checkpoints.forEach(cp => {
+    const id = 'dipbuy_' + cp.replace(':', '');
+    if (autoSlots.some(s => s.id === id)) return;   // never duplicate
+    const dipRef = addMin(cp, -5);
+    const entry  = addMin(cp, 2) + ':05';
+    const exit   = addMin(cp, 32) + ':05';
+    autoSlots.push({
+      id, enabled: false,
+      name: `Dip-Buy ${cp} (120-EMA)`,
+      entryTime: entry, exitTime: exit,
+      otm: 1, step: 50, sl: 5, tgt: 5, lots: 1, lotSize: 65,
+      autoLots: false, deployPct: 90, floorPremium: 0,
+      conditionSets: [
+        { id: id + '_setCE', name: 'Above MA + dip', direction: 'CE', logic: 'ALL', enabled: true, conditions: [
+          { id: id + '_ce1', enabled: true, leftTime: cp, leftField: 'close', op: '>', rightType: 'indicator', rightTime: '09:15', rightField: MA, rightValue: 0, offsetPts: 0 },
+          { id: id + '_ce2', enabled: true, leftTime: cp, leftField: 'close', op: '<', rightType: 'candle', rightTime: dipRef, rightField: 'open', rightValue: 0, offsetPts: 0 },
+        ]},
+        { id: id + '_setPE', name: 'Below MA + pop', direction: 'PE', logic: 'ALL', enabled: true, conditions: [
+          { id: id + '_pe1', enabled: true, leftTime: cp, leftField: 'close', op: '<', rightType: 'indicator', rightTime: '09:15', rightField: MA, rightValue: 0, offsetPts: 0 },
+          { id: id + '_pe2', enabled: true, leftTime: cp, leftField: 'close', op: '>', rightType: 'candle', rightTime: dipRef, rightField: 'open', rightValue: 0, offsetPts: 0 },
+        ]},
+      ],
+    });
+    added++;
+  });
+  saveAutoSlots(); renderAutoSlots();
+  alert(added
+    ? `Added ${added} dip-buy slot(s), all OFF. Toggle on the few you want, then Push to VM.\n\nNote: morning slots (10:20/10:35) use a shorter MA window since the engine has intraday data only.`
+    : 'Dip-buy slots already exist.');
+}
+
 // ── Condition Set Builder ─────────────────────────
 const SE_FIELDS = ['open','high','low','close','range','body','mid','upperwick','lowerwick'];
 const SE_FLBL   = {open:'Open',high:'High',low:'Low',close:'Close',range:'H-L',body:'|C-O|',mid:'Mid',upperwick:'UpWk',lowerwick:'LowWk'};
@@ -2394,6 +2434,9 @@ for (let h=9;h<=15;h++) for (let m=0;m<60;m++) {
 const seTO = v => SE_TIMES.map(t  => `<option value="${t}"${t===v?' selected':''}>${t}</option>`).join('');
 const seFO = v => SE_FIELDS.map(f => `<option value="${f}"${f===v?' selected':''}>${SE_FLBL[f]||f}</option>`).join('');
 const seOO = v => SE_OPS.map(o   => `<option value="${o}"${o===v?' selected':''}>${o}</option>`).join('');
+const SE_INDICATORS = ['sma120','ema120'];
+const SE_ILBL = { sma120:'SMA 120', ema120:'EMA 120' };
+const seIO = v => SE_INDICATORS.map(i => `<option value="${i}"${i===v?' selected':''}>${SE_ILBL[i]}</option>`).join('');
 
 function seAddSet() {
   seEditSets.push({ id:`set_${Date.now()}`, name:'', direction:'CE', logic:'ALL', enabled:true, conditions:[] });
@@ -2406,7 +2449,7 @@ function seMoveUp(id)    { const i=seEditSets.findIndex(s=>s.id===id);if(i>0){[s
 function seMoveDown(id)  { const i=seEditSets.findIndex(s=>s.id===id);if(i<seEditSets.length-1){[seEditSets[i],seEditSets[i+1]]=[seEditSets[i+1],seEditSets[i]];seRenderSets();} }
 function seAddCond(sid)  { const s=seEditSets.find(x=>x.id===sid);if(!s)return;s.conditions.push({id:`c_${Date.now()}`,enabled:true,leftTime:'09:20',leftField:'close',op:'>',rightType:'candle',rightTime:'09:15',rightField:'open',rightValue:0,offsetPts:0});seRenderSets(); }
 function seRemCond(sid,cid){ const s=seEditSets.find(x=>x.id===sid);if(s){s.conditions=s.conditions.filter(c=>c.id!==cid);seRenderSets();} }
-function seUpdCond(sid,cid,f,v){ const s=seEditSets.find(x=>x.id===sid);if(!s)return;const c=s.conditions.find(x=>x.id===cid);if(!c)return;c[f]=v;if(f==='rightType')seRenderSets(); }
+function seUpdCond(sid,cid,f,v){ const s=seEditSets.find(x=>x.id===sid);if(!s)return;const c=s.conditions.find(x=>x.id===cid);if(!c)return;c[f]=v;if(f==='rightType'){if(v==='indicator'&&!SE_INDICATORS.includes(c.rightField))c.rightField='ema120';seRenderSets();} }
 
 // ── Set duplicate ─────────────────────────────────
 function seDupSet(id) {
@@ -2589,10 +2632,13 @@ function seRenderSets() {
             <select onchange="seUpdCond('${set.id}','${c.id}','rightType',this.value)">
               <option value="candle"${c.rightType==='candle'?' selected':''}>Candle</option>
               <option value="value"${c.rightType==='value'?' selected':''}>Value</option>
+              <option value="indicator"${c.rightType==='indicator'?' selected':''}>Indicator</option>
             </select>
             ${c.rightType==='candle'
               ?`<select class="cts" onchange="seUpdCond('${set.id}','${c.id}','rightTime',this.value)">${seTO(c.rightTime)}</select>
                 <select onchange="seUpdCond('${set.id}','${c.id}','rightField',this.value)">${seFO(c.rightField)}</select>`
+              : c.rightType==='indicator'
+              ?`<select onchange="seUpdCond('${set.id}','${c.id}','rightField',this.value)">${seIO(c.rightField)}</select>`
               :`<input class="cpts" type="number" value="${c.rightValue||0}" onchange="seUpdCond('${set.id}','${c.id}','rightValue',this.value)">`}
             <span class="csep">±</span>
             <input class="cpts" type="number" value="${c.offsetPts||0}" onchange="seUpdCond('${set.id}','${c.id}','offsetPts',this.value)" title="Offset pts">
@@ -2669,7 +2715,7 @@ function seContradicts(c1,c2){
 }
 
 function seDescCond(c,i){
-  const r=c.rightType==='candle'?`${c.rightTime} ${c.rightField}`:`${c.rightValue}`;
+  const r=c.rightType==='candle'?`${c.rightTime} ${c.rightField}`:c.rightType==='indicator'?(SE_ILBL[c.rightField]||c.rightField):`${c.rightValue}`;
   const off=parseFloat(c.offsetPts||0);
   return `Cond ${i+1}: ${c.leftTime} ${c.leftField} ${c.op} ${r}${off?(off>0?'+':'')+off+'pts':''}`;
 }
