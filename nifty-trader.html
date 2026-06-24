@@ -3403,27 +3403,35 @@ function a1BuildSlots() {
   const base = { autoLots:false, deployPct:90, floorPremium:0 };
 
   return [
+    // ── 0946-CE-SR ── ORB momentum CE
+    // Analysis:09:44  Entry:09:46  Exit:10:15 (1m before 1016 entry)
     {
       id:'sr_0946', enabled:true, _srFixed:true,
-      name:'0946-CE-SR', entryTime:et('09:46'), exitTime:'10:16:30',
+      name:'0946-CE-SR', entryTime:et('09:46'), exitTime:'10:15:30',
       otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:65, ...base,
       conditionSets:[mkSet('ORB momentum up','CE','ALL',[
         mkCandCond('09:44','close','>','09:15','open', 20),
         mkIndCond ('09:44','close','>','sma20'),
       ])],
     },
+
+    // ── 1016-CE-SR ── Oversold 10-candle bounce CE
+    // Analysis:10:14  Entry:10:16  Exit:10:31 (1m before 1032 entry)
     {
       id:'sr_1016', enabled:true, _srFixed:true,
-      name:'1016-CE-SR', entryTime:et('10:16'), exitTime:'11:01:30',
+      name:'1016-CE-SR', entryTime:et('10:16'), exitTime:'10:31:30',
       otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
       conditionSets:[mkSet('Oversold 10c bounce','CE','ALL',[
         mkIndCond('10:14','close','<','sma20'),
         mkIndCond('10:05','close','<','sma20'),
       ])],
     },
+
+    // ── 1032-SR ── SMA50 slope + SMA20 consecutive PE
+    // Analysis:10:30  Entry:10:32  Exit:10:48 (1m before 1049 entry)
     {
       id:'sr_1032', enabled:true, _srFixed:true,
-      name:'1032-SR', entryTime:et('10:32'), exitTime:'11:02:30',
+      name:'1032-SR', entryTime:et('10:32'), exitTime:'10:48:30',
       otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
       conditionSets:[
         mkSet('PRIMARY: slope dn + below SMA50','PE','ALL',[
@@ -3438,15 +3446,21 @@ function a1BuildSlots() {
         ]),
       ],
     },
+
+    // ── 1049-PE-SR ── 15-min surge fade PE
+    // Analysis:10:47  Entry:10:49  Exit:11:01 (1m before 1102 entry)
     {
       id:'sr_1049', enabled:true, _srFixed:true,
-      name:'1049-PE-SR', entryTime:et('10:49'), exitTime:'11:19:30',
+      name:'1049-PE-SR', entryTime:et('10:49'), exitTime:'11:01:30',
       otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:65, ...base,
-      conditionSets:[mkSet('15m surge fade + above SMA50','PE','ALL',[
-        mkCandCond('10:47','close','>','10:33','close', 20),  // 15-min net move > +20pts
-        mkIndCond ('10:47','close','>','sma50'),               // AND above SMA50
+      conditionSets:[mkSet('15m surge fade','PE','ALL',[
+        mkCandCond('10:47','close','>','10:33','close', 20),
+        mkIndCond ('10:47','close','>','sma50'),
       ])],
     },
+
+    // ── 1102-PE-SR ── Overbought 1-candle fade PE
+    // Analysis:11:00  Entry:11:02  Exit:11:32 (5m gap to 1137)
     {
       id:'sr_1102', enabled:true, _srFixed:true,
       name:'1102-PE-SR', entryTime:et('11:02'), exitTime:'11:32:30',
@@ -3456,6 +3470,9 @@ function a1BuildSlots() {
         mkIndCond ('11:00','close','>','sma50'),
       ])],
     },
+
+    // ── 1137-PE-SR ── 30-min surge fade PE
+    // Analysis:11:35  Entry:11:37  Exit:12:07 (5m gap to 1212)
     {
       id:'sr_1137', enabled:true, _srFixed:true,
       name:'1137-PE-SR', entryTime:et('11:37'), exitTime:'12:07:30',
@@ -3465,26 +3482,35 @@ function a1BuildSlots() {
         mkIndCond ('11:35','close','>','sma20'),
       ])],
     },
+
+    // ── 1212-CE-SR ── SMA120 sustained trend long CE
+    // Analysis:12:10  Entry:12:12  Exit:12:31 (1m before 1232 entry)
     {
       id:'sr_1212', enabled:true, _srFixed:true,
-      name:'1212-CE-SR', entryTime:et('12:12'), exitTime:'12:42:30',
+      name:'1212-CE-SR', entryTime:et('12:12'), exitTime:'12:31:30',
       otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:65, ...base,
       conditionSets:[mkSet('SMA120 sustained trend long','CE','ALL',[
         mkIndCond('12:10','close','>','sma120'),
         mkIndCond('11:56','close','>','sma120'),
       ])],
     },
+
+    // ── 1232-CE-SR ── Oversold below SMA20 CE
+    // Analysis:12:30  Entry:12:32  Exit:12:51 (1m before 1252 entry)
     {
       id:'sr_1232', enabled:true, _srFixed:true,
-      name:'1232-CE-SR', entryTime:et('12:32'), exitTime:'13:02:30',
+      name:'1232-CE-SR', entryTime:et('12:32'), exitTime:'12:51:30',
       otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
       conditionSets:[mkSet('Oversold below SMA20','CE','ALL',[
         mkIndCond('12:30','close','<','sma20', -10),
       ])],
     },
+
+    // ── 1252-SR ── Overbought fade PE / Oversold bounce CE
+    // Analysis:12:50  Entry:12:52  Exit:13:03 (1m before 1304 entry)
     {
       id:'sr_1252', enabled:true, _srFixed:true,
-      name:'1252-SR', entryTime:et('12:52'), exitTime:'13:22:30',
+      name:'1252-SR', entryTime:et('12:52'), exitTime:'13:03:30',
       otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:65, ...base,
       conditionSets:[
         mkSet('PRIMARY: ob fade short','PE','ALL',[
@@ -3497,14 +3523,20 @@ function a1BuildSlots() {
         ]),
       ],
     },
+
+    // ── 1304-CE-SR ── Deep oversold SMA50 CE
+    // Analysis:13:02  Entry:13:04  Exit:13:17 (1m before 1318 entry)
     {
       id:'sr_1304', enabled:true, _srFixed:true,
-      name:'1304-CE-SR', entryTime:et('13:04'), exitTime:'13:34:30',
+      name:'1304-CE-SR', entryTime:et('13:04'), exitTime:'13:17:30',
       otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
       conditionSets:[mkSet('Deep oversold SMA50','CE','ALL',[
         mkIndCond('13:02','close','<','sma50', -20),
       ])],
     },
+
+    // ── 1318-PE-SR ── 5-min spike fade PE
+    // Analysis:13:16  Entry:13:18  Exit:13:48 (10m gap to 1358)
     {
       id:'sr_1318', enabled:true, _srFixed:true,
       name:'1318-PE-SR', entryTime:et('13:18'), exitTime:'13:48:30',
@@ -3513,6 +3545,9 @@ function a1BuildSlots() {
         mkCandCond('13:16','close','>','13:12','close', 10),
       ])],
     },
+
+    // ── 1358-CE-SR ── Pullback in rising SMA20 CE
+    // Analysis:13:56  Entry:13:58  Exit:14:28 (12m gap to 1440)
     {
       id:'sr_1358', enabled:true, _srFixed:true,
       name:'1358-CE-SR', entryTime:et('13:58'), exitTime:'14:28:30',
@@ -3522,6 +3557,48 @@ function a1BuildSlots() {
         mkCandCond('13:56','close','>','13:46','close'),
       ])],
     },
+
+    // ── 1440-PE-SR ── 30-min afternoon surge fade PE  🆕
+    // Analysis:14:38  Entry:14:40  Exit:14:59 (1m before 1500 entry)
+    // Backtest: WR 61%/65%, +185 opt pts, 17/23 months profitable
+    {
+      id:'sr_1440', enabled:true, _srFixed:true,
+      name:'1440-PE-SR', entryTime:et('14:40'), exitTime:'14:59:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('30m afternoon surge fade','PE','ALL',[
+        mkCandCond('14:38','close','>','14:09','close', 30),  // 30-min net >30pts
+        mkIndCond ('14:38','close','>','sma50'),               // above SMA50
+      ])],
+    },
+
+    // ── 1500-PE-SR ── 30-min pre-close surge fade PE  🆕
+    // Analysis:14:58  Entry:15:00  Exit:15:09 (1m before 1510 entry)
+    // Backtest: WR 61%/62%, +193 opt pts, 19/24 months profitable
+    {
+      id:'sr_1500', enabled:true, _srFixed:true,
+      name:'1500-PE-SR', entryTime:et('15:00'), exitTime:'15:09:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('Pre-close surge fade','PE','ALL',[
+        mkCandCond('14:58','close','>','14:29','close', 30),  // 30-min net >30pts
+        mkIndCond ('14:58','close','>','sma50'),               // above SMA50
+      ])],
+    },
+
+    // ── 1510-PE-SR ── EOD overbought fade PE  🆕
+    // Analysis:15:08  Entry:15:10  Exit:15:25 (1m before 1526 entry)
+    // Backtest: WR 65%/65%, +408 opt pts, 22/25 months profitable ⭐ BEST NEW SLOT
+    {
+      id:'sr_1510', enabled:true, _srFixed:true,
+      name:'1510-PE-SR', entryTime:et('15:10'), exitTime:'15:25:00',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('EOD overbought fade','PE','ALL',[
+        mkCandCond('15:08','close','>','15:08','open'),       // bullish candle
+        mkIndCond ('15:08','close','>','sma20'),               // above SMA20
+      ])],
+    },
+
+    // ── 1526-PE-SR ── EOD drift PE
+    // Analysis:15:22  Entry:15:26  Exit:15:29 (market close)
     {
       id:'sr_1526', enabled:true, _srFixed:true,
       name:'1526-PE-SR', entryTime:'15:26:00', exitTime:'15:29:00',
@@ -3531,6 +3608,7 @@ function a1BuildSlots() {
         mkIndCond('15:18','close','>','sma120'),
       ])],
     },
+
   ];
 }
 
