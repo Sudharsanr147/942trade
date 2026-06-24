@@ -2551,8 +2551,8 @@ for (let h=9;h<=15;h++) for (let m=0;m<60;m++) {
 const seTO = v => SE_TIMES.map(t  => `<option value="${t}"${t===v?' selected':''}>${t}</option>`).join('');
 const seFO = v => SE_FIELDS.map(f => `<option value="${f}"${f===v?' selected':''}>${SE_FLBL[f]||f}</option>`).join('');
 const seOO = v => SE_OPS.map(o   => `<option value="${o}"${o===v?' selected':''}>${o}</option>`).join('');
-const SE_INDICATORS = ['sma120','ema120'];
-const SE_ILBL = { sma120:'SMA 120', ema120:'EMA 120' };
+const SE_INDICATORS = ['sma20','sma50','sma120','ema20','ema50','ema120'];
+const SE_ILBL = { sma20:'SMA 20', sma50:'SMA 50', sma120:'SMA 120', ema20:'EMA 20', ema50:'EMA 50', ema120:'EMA 120' };
 const seIO = v => SE_INDICATORS.map(i => `<option value="${i}"${i===v?' selected':''}>${SE_ILBL[i]}</option>`).join('');
 
 function seAddSet() {
@@ -3442,9 +3442,9 @@ function a1BuildSlots() {
       id:'sr_1049', enabled:true, _srFixed:true,
       name:'1049-PE-SR', entryTime:et('10:49'), exitTime:'11:19:30',
       otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:65, ...base,
-      conditionSets:[mkSet('15m surge fade','PE','ALL',[
-        mkCandCond('10:47','close','>','10:33','close', 20),
-        mkIndCond ('10:47','close','>','sma50'),
+      conditionSets:[mkSet('15m surge fade + above SMA50','PE','ALL',[
+        mkCandCond('10:47','close','>','10:33','close', 20),  // 15-min net move > +20pts
+        mkIndCond ('10:47','close','>','sma50'),               // AND above SMA50
       ])],
     },
     {
