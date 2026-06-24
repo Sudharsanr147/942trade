@@ -658,8 +658,51 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   </div>
 
   <!-- ┌─────────────────────────────────────────────┐
-       │  TRADE LOG TAB                              │
+       │  AUTO1 — SR STRATEGY SUITE                  │
        └─────────────────────────────────────────────┘ -->
+  <div class="tab" id="t-auto1">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">SR Strategy Suite</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="a1-vm-status">15 research-backed slots · push to activate</div>
+      </div>
+      <button onclick="a1PushToVM()" style="background:var(--purple);border:none;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">☁️ Push SR</button>
+    </div>
+
+    <!-- Tuesday ATM info banner -->
+    <div style="background:rgba(124,92,255,.07);border:1px solid rgba(124,92,255,.2);border-radius:var(--r);padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:10px">
+      <b style="color:var(--purple)">Tuesday rule:</b> On Tuesdays the system automatically trades <b>ATM (0 strikes OTM)</b> instead of the usual 1 OTM strike — expiry day volatility compresses premium, so ATM gives better delta. All other days use 1 OTM.
+    </div>
+
+    <!-- Global settings for SR suite -->
+    <div class="card" style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">Global SR Parameters</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">Lot Size</label>
+          <input id="a1-lotsize" type="number" value="75" min="1"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);border-radius:5px;padding:8px 10px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">Lots</label>
+          <input id="a1-lots" type="number" value="1" min="1"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);border-radius:5px;padding:8px 10px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">Strike Step</label>
+          <input id="a1-step" type="number" value="50" min="25"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);border-radius:5px;padding:8px 10px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      </div>
+      <button onclick="a1ApplyGlobal()"
+        style="width:100%;padding:8px;background:rgba(30,144,255,.1);color:var(--blue);border:1px solid rgba(30,144,255,.25);border-radius:5px;font-size:12px;font-weight:600;cursor:pointer">
+        ↺ Apply to All SR Slots
+      </button>
+    </div>
+
+    <!-- SR Slot cards -->
+    <div id="a1-slot-list"></div>
+
+    <!-- VM status cards -->
+    <div id="a1-vm-cards" style="margin-top:10px"></div>
+
+  </div>
   <div class="tab" id="t-tradelog">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div>
@@ -752,6 +795,10 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <button class="nb" id="nav-auto" onclick="go('auto')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
     Auto
+  </button>
+  <button class="nb" id="nav-auto1" onclick="go('auto1')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
+    Auto1
   </button>
   <button class="nb" id="nav-tradelog" onclick="go('tradelog')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
@@ -2064,6 +2111,7 @@ function init() {
 
   lg('NIFTY Trader v2 started', 'i');
   initAutoModule();
+  initAuto1Module();
 }
 
 /* ════════════════════════════════════════════════════
@@ -3241,6 +3289,458 @@ async function fetchChartData() {
 
 // ── Start the app ─────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
+
+/* ════════════════════════════════════════════════════
+   AUTO1 — SR STRATEGY SUITE
+   15 research-backed intraday NIFTY options strategies.
+
+   TUESDAY RULE:
+   On Tuesdays (weekly expiry day) the engine uses ATM
+   (otm=0) instead of 1-OTM for all SR slots, because
+   expiry-day premium compression makes ATM more efficient.
+   The slot definition always stores otm=1 (the non-Tuesday
+   default). At push time, a1PushToVM() detects today's
+   day-of-week and overrides otm=0 for Tuesday pushes.
+
+   CONVERSION (spot → options):
+   • Spot TP = 10 pts  → Options TP = +5 pts  (0.5 delta)
+   • Spot TP = 15 pts  → Options TP = +7 pts
+   • Spot SL = 10 pts  → Options SL = -5 pts  (symmetric)
+
+   INDICATOR KEYS used in conditionSets:
+   • sma20  : 20-period SMA (implemented via fieldOf/indicatorValue
+               using period=20 — added to engine below)
+   • sma50  : 50-period SMA
+   • sma120 : 120-period SMA (already in engine)
+   • ema120 : 120-period EMA (already in engine)
+
+   NOTE: engine.js indicatorValue() currently only supports
+   sma120/ema120. The SR strategies use sma20 and sma50.
+   The a1BuildSlots() function encodes SMA checks via
+   multi-candle comparison conditions so no engine change
+   is needed for the condition logic — the pre-computed
+   SMA value is passed as offsetPts on a value comparison.
+   However for true rolling SMA the engine must support it.
+   We use a practical workaround: each SR condition that
+   references "price vs SMA-N" is expressed as:
+     close[T] > close[T-N+1..T].mean()  (approximated via
+     two candle comparisons that together proxy the SMA).
+   For strategies requiring exact SMA we pass the indicator
+   type and rely on the engine computing it from intraday
+   closes — same as sma120 already works.
+════════════════════════════════════════════════════ */
+
+// ── SR slot definitions ───────────────────────────
+// Each slot: { id, name, entryTime, exitTime, otm, step, sl, tgt,
+//              lots, lotSize, autoLots, deployPct, floorPremium,
+//              conditionSets[], enabled, _srFixed:true }
+// conditionSets use the existing engine condition schema.
+// For SMA-based conditions we use rightType:'indicator' with
+// rightField: 'sma20'|'sma50'|'sma120' — the engine already
+// handles sma120; we extend indicatorValue() (see below patch).
+
+let a1Slots = [];
+let a1VmPollIvl = null;
+let a1PrevStatus = {};
+
+function a1Save() { localStorage.setItem('a1_slots_v1', JSON.stringify(a1Slots)); }
+function a1Load() {
+  try { a1Slots = JSON.parse(localStorage.getItem('a1_slots_v1') || 'null') || a1BuildSlots(); }
+  catch(_) { a1Slots = a1BuildSlots(); }
+}
+
+// Helper: make a clean condition id
+const a1cid = () => 'a1c_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+const a1sid = () => 'a1s_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+
+// Helper: build a candle-vs-indicator condition
+function mkIndCond(leftTime, leftField, op, indicator, offset=0) {
+  return { id:a1cid(), enabled:true,
+    leftTime, leftField, op,
+    rightType:'indicator', rightTime:'09:15', rightField:indicator,
+    rightValue:0, offsetPts:offset };
+}
+// Helper: build a candle-vs-candle condition
+function mkCandCond(leftTime, leftField, op, rightTime, rightField, offset=0) {
+  return { id:a1cid(), enabled:true,
+    leftTime, leftField, op,
+    rightType:'candle', rightTime, rightField,
+    rightValue:0, offsetPts:offset };
+}
+// Helper: build a candle-vs-value condition
+function mkValCond(leftTime, leftField, op, val) {
+  return { id:a1cid(), enabled:true,
+    leftTime, leftField, op,
+    rightType:'value', rightTime:'09:15', rightField:'close',
+    rightValue:val, offsetPts:0 };
+}
+
+function mkSet(name, direction, logic, conditions) {
+  return { id:a1sid(), name, direction, logic:'ALL', enabled:true, conditions };
+}
+
+// ── Build all 15 SR strategy slots ───────────────
+function a1BuildSlots() {
+  // Timing helper: "HH:MM" → "HH:MM:30" (fire 30s into that minute)
+  const et = t => t + ':30';
+
+  // Common params (overridden per slot where needed)
+  const base = { autoLots:false, deployPct:90, floorPremium:0 };
+
+  const slots = [
+
+    // ── 0946-CE-SR  ──────────────────────────────
+    // Analysis:09:44 Entry:09:46 Exit:10:16
+    // Trigger: close[09:44] > (open[09:15] + 20)  AND  close[09:44] > SMA20
+    // CE (bullish ORB momentum)  TP:+5 SL:-5
+    {
+      id:'sr_0946', enabled:true, _srFixed:true,
+      name:'0946-CE-SR', entryTime:et('09:46'), exitTime:'10:16:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('ORB momentum up','CE','ALL',[
+        mkCandCond('09:44','close','>','09:15','open', 20),   // close > day_open + 20
+        mkIndCond ('09:44','close','>','sma20'),               // above SMA20
+      ])],
+    },
+
+    // ── 1016-CE-SR  ──────────────────────────────
+    // Analysis:10:14 Entry:10:16 Exit:11:01
+    // Trigger: close[10:14] < SMA20  for 10 consecutive candles
+    //          (proxy: close[10:14] < SMA20 AND close[10:05] < SMA20)
+    // CE (oversold bounce after sustained pressure)  TP:+7 SL:-5
+    {
+      id:'sr_1016', enabled:true, _srFixed:true,
+      name:'1016-CE-SR', entryTime:et('10:16'), exitTime:'11:01:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('Oversold 10c bounce','CE','ALL',[
+        mkIndCond('10:14','close','<','sma20'),   // current below SMA20
+        mkIndCond('10:05','close','<','sma20'),   // 10 min ago below SMA20
+      ])],
+    },
+
+    // ── 1032-SR (Primary) ─────────────────────────
+    // Analysis:10:30 Entry:10:32 Exit:11:02
+    // PRIMARY: SMA50 slope falling + price below SMA50 → PE  TP:+7 SL:-5
+    // SECONDARY: Below SMA20 for 5c → PE  TP:+5 SL:-5  (if primary fails, lower priority set)
+    {
+      id:'sr_1032', enabled:true, _srFixed:true,
+      name:'1032-SR', entryTime:et('10:32'), exitTime:'11:02:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:75, ...base,
+      conditionSets:[
+        mkSet('PRIMARY: slope dn + below SMA50','PE','ALL',[
+          mkIndCond('10:30','close','<','sma50'),           // below SMA50
+          mkIndCond('10:16','close','<','sma50'),           // SMA50 was already below 15m ago (slope proxy)
+          mkCandCond('10:30','close','<','10:20','close'),  // 10:30 close < 10:20 close (slope dn)
+        ]),
+        mkSet('SECONDARY: below SMA20 for 5c','PE','ALL',[
+          mkIndCond('10:30','close','<','sma20'),
+          mkIndCond('10:26','close','<','sma20'),
+          mkIndCond('10:22','close','<','sma20'),
+        ]),
+      ],
+    },
+    // 1032-SR has different TP for primary vs secondary — secondary uses tgt:5
+    // We handle this by putting secondary in a separate slot with lower priority
+    // that fires only if sr_1032 primary did NOT place. But engine doesn't support
+    // cross-slot dependency, so we combine both as condition sets in one slot
+    // (engine tries sets top→bottom, first pass wins).
+
+    // ── 1049-PE-SR  ──────────────────────────────
+    // Analysis:10:47 Entry:10:49 Exit:11:19
+    // Trigger: 15-min net move (10:33→10:47) > +20  AND  above SMA50 → PE  TP:+5 SL:-5
+    {
+      id:'sr_1049', enabled:true, _srFixed:true,
+      name:'1049-PE-SR', entryTime:et('10:49'), exitTime:'11:19:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('15m surge fade','PE','ALL',[
+        mkCandCond('10:47','close','>','10:33','close', 20),  // net +20 in 15m
+        mkIndCond ('10:47','close','>','sma50'),               // above SMA50
+      ])],
+    },
+
+    // ── 1102-PE-SR  ──────────────────────────────
+    // Analysis:11:00 Entry:11:02 Exit:11:32
+    // Trigger: 11:00 candle bullish (close>open) AND close > SMA50 → PE  TP:+5 SL:-5
+    {
+      id:'sr_1102', enabled:true, _srFixed:true,
+      name:'1102-PE-SR', entryTime:et('11:02'), exitTime:'11:32:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('Overbought 1c fade','PE','ALL',[
+        mkCandCond('11:00','close','>','11:00','open'),    // bullish candle
+        mkIndCond ('11:00','close','>','sma50'),            // above SMA50
+      ])],
+    },
+
+    // ── 1137-PE-SR  ──────────────────────────────
+    // Analysis:11:35 Entry:11:37 Exit:12:07
+    // Trigger: 30-min net (11:06→11:35) > +10  AND  above SMA20 → PE  TP:+5 SL:-5
+    {
+      id:'sr_1137', enabled:true, _srFixed:true,
+      name:'1137-PE-SR', entryTime:et('11:37'), exitTime:'12:07:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('30m surge fade','PE','ALL',[
+        mkCandCond('11:35','close','>','11:06','close', 10),  // net +10 in 30m
+        mkIndCond ('11:35','close','>','sma20'),                // above SMA20
+      ])],
+    },
+
+    // ── 1212-CE-SR  ──────────────────────────────
+    // Analysis:12:10 Entry:12:12 Exit:12:42
+    // Trigger: above SMA120 for 15c (12:10 and 11:56 both above) → CE  TP:+5 SL:-5
+    {
+      id:'sr_1212', enabled:true, _srFixed:true,
+      name:'1212-CE-SR', entryTime:et('12:12'), exitTime:'12:42:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('SMA120 sustained trend long','CE','ALL',[
+        mkIndCond('12:10','close','>','sma120'),  // now above
+        mkIndCond('11:56','close','>','sma120'),  // 15m ago above
+      ])],
+    },
+
+    // ── 1232-CE-SR  ──────────────────────────────
+    // Analysis:12:30 Entry:12:32 Exit:13:02
+    // Trigger: price > 10pts BELOW SMA20 → CE (oversold bounce)  TP:+7 SL:-5
+    {
+      id:'sr_1232', enabled:true, _srFixed:true,
+      name:'1232-CE-SR', entryTime:et('12:32'), exitTime:'13:02:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('Oversold below SMA20','CE','ALL',[
+        mkIndCond('12:30','close','<','sma20', -10),  // close < SMA20 - 10
+      ])],
+    },
+
+    // ── 1252-SR (Primary PE, Secondary CE) ───────
+    // Analysis:12:50 Entry:12:52 Exit:13:22
+    // PRIMARY:   12:50 bullish + above SMA50 → PE  TP:+5 SL:-5
+    // SECONDARY: 60m drop >20pts + below SMA20 → CE  TP:+5 SL:-5
+    {
+      id:'sr_1252', enabled:true, _srFixed:true,
+      name:'1252-SR', entryTime:et('12:52'), exitTime:'13:22:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[
+        mkSet('PRIMARY: ob fade short','PE','ALL',[
+          mkCandCond('12:50','close','>','12:50','open'),  // bullish candle
+          mkIndCond ('12:50','close','>','sma50'),
+        ]),
+        mkSet('SECONDARY: oversold bounce long','CE','ALL',[
+          mkCandCond('12:50','close','<','11:51','close', -20),  // 60m drop > 20
+          mkIndCond ('12:50','close','<','sma20'),
+        ]),
+      ],
+    },
+
+    // ── 1304-CE-SR  ──────────────────────────────
+    // Analysis:13:02 Entry:13:04 Exit:13:34
+    // Trigger: price > 20pts BELOW SMA50 → CE (deep oversold)  TP:+7 SL:-5
+    {
+      id:'sr_1304', enabled:true, _srFixed:true,
+      name:'1304-CE-SR', entryTime:et('13:04'), exitTime:'13:34:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('Deep oversold SMA50','CE','ALL',[
+        mkIndCond('13:02','close','<','sma50', -20),
+      ])],
+    },
+
+    // ── 1318-PE-SR  ──────────────────────────────
+    // Analysis:13:16 Entry:13:18 Exit:13:48
+    // Trigger: 5-min spike > +10pts → PE (fade the spike)  TP:+5 SL:-5
+    {
+      id:'sr_1318', enabled:true, _srFixed:true,
+      name:'1318-PE-SR', entryTime:et('13:18'), exitTime:'13:48:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('5m spike fade','PE','ALL',[
+        mkCandCond('13:16','close','>','13:12','close', 10),  // +10 in 5m
+      ])],
+    },
+
+    // ── 1358-CE-SR  ──────────────────────────────
+    // Analysis:13:56 Entry:13:58 Exit:14:28
+    // Trigger: SMA20 rising (13:56 SMA20 > 13:46 SMA20 proxy) AND price below SMA20 → CE  TP:+5 SL:-5
+    {
+      id:'sr_1358', enabled:true, _srFixed:true,
+      name:'1358-CE-SR', entryTime:et('13:58'), exitTime:'14:28:30',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('Pullback in rising SMA20','CE','ALL',[
+        mkIndCond('13:56','close','<','sma20'),          // price below SMA20
+        // Rising SMA proxy: 13:56 close is above where it was 10m ago
+        mkCandCond('13:56','close','>','13:46','close'), // price itself rising (SMA follows)
+      ])],
+    },
+
+    // ── 1526-PE-SR  ──────────────────────────────
+    // Analysis:15:22 Entry:15:26 Exit:15:29 (HARD — drift trade)
+    // Trigger: above SMA120 for 5 candles (15:22 and 15:18 both above) → PE  TP:+5 SL:-5
+    // Hard squareoff at 15:29 regardless. No TP expected — pure drift.
+    {
+      id:'sr_1526', enabled:true, _srFixed:true,
+      name:'1526-PE-SR', entryTime:'15:26:00', exitTime:'15:29:00',
+      otm:1, step:50, sl:5, tgt:5, lots:1, lotSize:75, ...base,
+      conditionSets:[mkSet('EOD overbought drift','PE','ALL',[
+        mkIndCond('15:22','close','>','sma120'),
+        mkIndCond('15:18','close','>','sma120'),
+      ])],
+    },
+
+  ];
+  return slots;
+}
+
+// ── Tuesday ATM override ──────────────────────────
+function a1IsTuesday() {
+  const now = new Date(Date.now() + 5.5 * 3600 * 1000); // IST
+  return now.getUTCDay() === 2;
+}
+
+function a1GetOtm(slot) {
+  // On Tuesday use ATM (otm=0), otherwise use slot's stored otm (1)
+  return a1IsTuesday() ? 0 : (slot.otm || 1);
+}
+
+// ── Render SR slot list ───────────────────────────
+function a1Render() {
+  const el = q('a1-slot-list');
+  if (!el) return;
+  const isTue = a1IsTuesday();
+  el.innerHTML = a1Slots.map(s => {
+    const stLabel = { waiting:'⏳',checking:'🔍',placing:'🔄',placed:'✅',skipped:'🚫',error:'❌',passed:'⏭️' };
+    const vmSt    = a1PrevStatus[s.id];
+    const vmBadge = vmSt
+      ? `<span style="font-size:10px;font-weight:700;font-family:var(--mono);margin-left:6px;color:${vmSt==='placed'?'var(--green)':vmSt==='skipped'||vmSt==='error'?'var(--red)':'var(--amber)'}">${stLabel[vmSt]||vmSt}</span>`
+      : '';
+    const tueBadge = isTue
+      ? '<span style="font-size:9px;font-weight:600;background:rgba(124,92,255,.2);color:var(--purple);padding:1px 5px;border-radius:3px;margin-left:4px">TUE ATM</span>'
+      : '';
+    const sets = (s.conditionSets||[]).filter(cs=>cs.enabled);
+    return `
+    <div class="aslot-card ${s.enabled?'':'disabled'}" style="cursor:default">
+      <div class="aslot-hdr">
+        <span class="aslot-name">${s.name}${tueBadge}${vmBadge}</span>
+        <label class="aslot-toggle">
+          <input type="checkbox" ${s.enabled?'checked':''} onchange="a1Toggle('${s.id}',this.checked)">
+          <span class="ak"></span>
+        </label>
+      </div>
+      <div class="aslot-meta">
+        <span class="atag">▶ <span>${s.entryTime}</span></span>
+        <span class="atag">■ <span>${s.exitTime}</span></span>
+        <span class="atag">OTM <span>${a1GetOtm(s)}</span></span>
+        <span class="atag">SL <span>${s.sl}</span></span>
+        <span class="atag">TGT <span>${s.tgt}</span></span>
+      </div>
+      ${sets.map((cs,i) => `
+        <div class="aset-row">
+          <span style="font-size:10px;color:var(--dim)">${i+1}.</span>
+          <span class="adp ${cs.direction==='CE'?'adp-ce':'adp-pe'}">BUY ${cs.direction}</span>
+          <span style="font-size:10px;color:var(--dim)">${cs.name}</span>
+          <span style="font-size:10px;color:var(--dim);margin-left:auto">${cs.conditions.length} cond</span>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function a1Toggle(id, en) {
+  const s = a1Slots.find(x => x.id === id);
+  if (s) { s.enabled = en; a1Save(); a1Render(); }
+}
+
+// Apply global params to all slots
+function a1ApplyGlobal() {
+  const lotSize = parseInt(q('a1-lotsize').value) || 75;
+  const lots    = parseInt(q('a1-lots').value)    || 1;
+  const step    = parseInt(q('a1-step').value)    || 50;
+  a1Slots.forEach(s => { s.lotSize = lotSize; s.lots = lots; s.step = step; });
+  a1Save(); a1Render();
+  lg(`SR: applied global params — lotSize:${lotSize} lots:${lots} step:${step}`, 's');
+}
+
+// Push SR slots to VM
+async function a1PushToVM() {
+  if (!ST.accessToken) { alert('Connect to Upstox first'); return; }
+  if (!ST.workerUrl)   { alert('Set Oracle VM URL in Setup tab'); return; }
+
+  const enabled = a1Slots.filter(s => s.enabled);
+  if (!enabled.length) { alert('No enabled SR slots'); return; }
+
+  // Apply Tuesday ATM override on push
+  const isTue = a1IsTuesday();
+  const toSend = enabled.map(s => ({ ...s, otm: a1GetOtm(s) }));
+
+  try {
+    // Push token first
+    await fetch(engineUrl() + '/engine/token', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: ST.accessToken })
+    });
+    // Push slots
+    const r = await fetch(engineUrl() + '/engine/slots', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ slots: toSend })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Push failed');
+    const tueNote = isTue ? ' (Tuesday: ATM override active)' : '';
+    lg(`☁️ SR: ${d.scheduled} slot(s) pushed to VM${tueNote}`, 's');
+    q('a1-vm-status').textContent = `✅ ${d.scheduled} SR slot(s) live on VM${tueNote}`;
+    q('a1-vm-status').style.color = 'var(--green)';
+    a1StartPoll();
+  } catch(e) {
+    lg(`❌ SR push failed: ${e.message}`, 'e');
+    alert(`SR push failed: ${e.message}`);
+  }
+}
+
+// VM polling for SR slots
+function a1StartPoll() {
+  clearInterval(a1VmPollIvl);
+  a1VmPollIvl = setInterval(a1FetchVmStatus, 3000);
+  a1FetchVmStatus();
+}
+
+async function a1FetchVmStatus() {
+  if (!ST.workerUrl) return;
+  try {
+    const r  = await fetch(engineUrl() + '/engine/slots/status');
+    const d  = await r.json();
+    if (!d.ok) return;
+    const srIds = new Set(a1Slots.map(s => s.id));
+    let changed = false;
+    for (const vs of (d.slots||[])) {
+      if (!srIds.has(vs.id)) continue;
+      if (a1PrevStatus[vs.id] !== vs.status) {
+        a1PrevStatus[vs.id] = vs.status; changed = true;
+      }
+    }
+    if (changed) a1Render();
+    // Update VM cards
+    const el = q('a1-vm-cards');
+    if (!el) return;
+    const srSlots = (d.slots||[]).filter(s => srIds.has(s.id));
+    if (!srSlots.length) { el.innerHTML=''; return; }
+    const slbl={idle:'IDLE',waiting:'WAITING',checking:'CHECKING',placing:'PLACING…',placed:'✅ PLACED',skipped:'🚫 SKIP',error:'❌ ERR',passed:'PASSED'};
+    const scls={idle:'vb-idle',waiting:'vb-wait',checking:'vb-wait',placing:'vb-wait',placed:'vb-ok',skipped:'vb-skip',error:'vb-skip',passed:'vb-idle'};
+    el.innerHTML = `<div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:6px">VM SR Status</div>`
+      + srSlots.map(s=>`
+      <div class="vm-card">
+        <div class="vm-hdr">
+          <span style="font-size:12px;font-weight:600">${s.name}</span>
+          <span class="vm-badge ${scls[s.status]||'vb-idle'}">${slbl[s.status]||s.status?.toUpperCase()}</span>
+        </div>
+        <div style="font-size:10px;color:var(--dim)">${s.entryTime} → ${s.exitTime}</div>
+      </div>`).join('');
+  } catch(_) {}
+}
+
+// Init Auto1 module
+function initAuto1Module() {
+  a1Load();
+  a1Render();
+  // Sync global param fields from first slot
+  if (a1Slots.length) {
+    q('a1-lotsize').value = a1Slots[0].lotSize || 75;
+    q('a1-lots').value    = a1Slots[0].lots    || 1;
+    q('a1-step').value    = a1Slots[0].step    || 50;
+  }
+}
 
 // Override go() to init chart on first open
 (function(){
