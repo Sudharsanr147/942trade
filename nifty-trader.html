@@ -3896,6 +3896,18 @@ function initAuto1Module() {
   a1Render();
   a1PatchSaveSlot();
 }
+
+// Override go() to init chart on first open
+(function(){
+  const _orig = go;
+  window.go = function(tab) {
+    _orig(tab);
+    if (tab === 'chart' && !_chartInstance) setTimeout(initChart, 60);
+  };
+})();
+
+</script>
+<!-- ══ SLOT EDITOR MODAL ══════════════════════════════ -->
 <div id="slot-modal-overlay">
 <div id="slot-modal">
   <div id="slot-modal-hdr">
