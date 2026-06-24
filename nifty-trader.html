@@ -29,7 +29,7 @@
   --mono:   'JetBrains Mono', monospace;
   --sans:   'IBM Plex Sans', sans-serif;
   --r:      8px;
-} 
+}
 
 /* ══════════════════════════════════════════════
    RESET + BASE
@@ -3023,7 +3023,7 @@ function checkAndCaptureLogs(vmSlots, logEntries, engineStatus) {
     const prev = prevSlotStatus[slot.id];
     const curr = slot.status;
 
-    if (['placed','skipped','error'].includes(curr)) {
+    if (['placed','skipped','error','passed'].includes(curr)) {
       const alreadyLogged = tradeLogs[today]?.[slot.name];
 
       if (prev !== undefined && prev !== curr) {
@@ -3938,13 +3938,20 @@ function a1StartPoll() {
 async function a1FetchVmStatus() {
   if (!ST.workerUrl) return;
   try {
-    const r  = await fetch(engineUrl() + '/engine/slots/status');
-    const d  = await r.json();
+    const [sr, er] = await Promise.all([
+      fetch(engineUrl() + '/engine/slots/status'),
+      fetch(engineUrl() + '/engine/status'),
+    ]);
+    const d  = await sr.json();
+    const ed = await er.json().catch(() => ({}));
     if (!d.ok) return;
     const srIds = new Set(a1Slots.map(s => s.id));
+    // Filter only SR slots for log capture
+    const srSlotStatuses = (d.slots||[]).filter(s => srIds.has(s.id));
+    // ── Capture to trade log (same as Auto tab) ──
+    checkAndCaptureLogs(srSlotStatuses, ed.log||[], d.engineStatus||'');
     let changed = false;
-    for (const vs of (d.slots||[])) {
-      if (!srIds.has(vs.id)) continue;
+    for (const vs of srSlotStatuses) {
       if (a1PrevStatus[vs.id] !== vs.status) { a1PrevStatus[vs.id] = vs.status; changed = true; }
     }
     if (changed) a1Render();
