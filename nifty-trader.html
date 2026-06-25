@@ -643,8 +643,14 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Auto Strategies</div>
         <div style="font-size:11px;color:var(--dim);margin-top:2px" id="auto-vm-status">Slots push to VM on login</div>
       </div>
-      <button onclick="openSlotEditor(null)" style="background:var(--purple);border:none;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">+ New Slot</button>
-      <button onclick="addDipBuySlots()" style="background:var(--s3);border:1px solid var(--purple);color:var(--txt);padding:7px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">+ Dip-Buy Slots</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button onclick="openSlotEditor(null)" style="background:var(--purple);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">+ New</button>
+        <button onclick="addDipBuySlots()" style="background:var(--s3);border:1px solid var(--purple);color:var(--txt);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">+ Dip-Buy</button>
+        <button onclick="autoExportSlots()" style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--amber);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Export slots as JSON backup">↓ Backup</button>
+        <label style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--amber);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Import slots from JSON backup">
+          ↑ Restore<input type="file" accept=".json" onchange="autoImportSlots(event)" style="display:none">
+        </label>
+      </div>
     </div>
     <button id="btn-push-auto" onclick="manualPushToVM()"
       style="display:block;width:100%;padding:11px;background:rgba(0,212,120,.08);color:var(--green);border:1px solid rgba(0,212,120,.25);border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px">
@@ -670,6 +676,10 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       </div>
       <div style="display:flex;gap:6px">
         <button onclick="a1OpenNew()" style="background:rgba(0,212,120,.1);border:1px solid rgba(0,212,120,.25);color:var(--green);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">+ New</button>
+        <button onclick="a1ExportSlots()" style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--amber);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Export SR slots as JSON backup">↓ Backup</button>
+        <label style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--amber);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Import SR slots from JSON backup">
+          ↑ Restore<input type="file" accept=".json" onchange="a1ImportSlots(event)" style="display:none">
+        </label>
         <button onclick="a1PushToVM()" style="background:var(--purple);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">☁️ Push SR</button>
       </div>
     </div>
@@ -796,41 +806,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
   </div>
 
-  <!-- ┌─────────────────────────────────────────────┐
-       │  CHART TAB                                  │
        └─────────────────────────────────────────────┘ -->
-  <div class="tab" id="t-chart">
-    <!-- Toolbar -->
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px 8px;background:var(--s1);border-bottom:1px solid var(--bdr);flex-shrink:0">
-      <div>
-        <div style="font-size:12px;font-weight:700;font-family:var(--mono);color:var(--txt)">NIFTY 50</div>
-        <div style="font-size:10px;color:var(--dim)">1 min · Today</div>
-      </div>
-      <div id="chart-price" style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--txt)">—</div>
-      <div id="chart-change" style="font-family:var(--mono);font-size:11px;color:var(--dim)"></div>
-      <div style="margin-left:auto;display:flex;gap:8px">
-        <button onclick="fetchChartData()" id="chart-refresh-btn"
-          style="background:var(--s2);border:1px solid var(--bdr);color:var(--txt);padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer">
-          ↻ Refresh
-        </button>
-      </div>
-    </div>
-    <!-- Chart container -->
-    <div id="chart-container" style="flex:1;min-height:0;position:relative">
-      <div id="chart-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;flex-direction:column;gap:8px">
-        <span>Tap Refresh to load chart</span>
-        <span style="font-size:11px;color:var(--dim)">Requires Upstox connection</span>
-      </div>
-    </div>
-    <!-- Crosshair info bar -->
-    <div id="chart-crosshair" style="height:22px;padding:0 14px;background:var(--s1);border-top:1px solid var(--bdr);font-family:var(--mono);font-size:10px;color:var(--dim);display:flex;align-items:center;gap:12px;flex-shrink:0">
-      <span id="chart-xhair-time"></span>
-      <span id="chart-xhair-o" style="color:var(--txt)"></span>
-      <span id="chart-xhair-h" style="color:var(--green)"></span>
-      <span id="chart-xhair-l" style="color:var(--red)"></span>
-      <span id="chart-xhair-c" style="color:var(--amber)"></span>
-    </div>
-  </div>
 
   <!-- ┌─────────────────────────────────────────────┐
        │  LOG TAB                                    │
@@ -873,9 +849,9 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
     Trades
   </button>
-  <button class="nb" id="nav-chart" onclick="go('chart')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    Chart
+  <button class="nb" id="nav-bt" onclick="go('bt')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+    BT
   </button>
   <button class="nb" id="nav-log" onclick="go('log')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -2181,6 +2157,7 @@ function init() {
   lg('NIFTY Trader v2 started', 'i');
   initAutoModule();
   initAuto1Module();
+  initBtModule();
 }
 
 /* ════════════════════════════════════════════════════
@@ -3172,189 +3149,6 @@ function copyExportData() {
    NIFTY CANDLESTICK CHART
    Uses TradingView Lightweight Charts (free, open source)
 ════════════════════════════════════════════════════ */
-let _chartInstance = null;
-let _candleSeries  = null;
-let _chartFullTimer = null;   // 60s full history refresh
-let _chartLiveTimer = null;   // 1s live bar update
-let _liveCandle     = null;   // current incomplete candle
-
-function loadLWCharts() {
-  return new Promise((resolve, reject) => {
-    if (window.LightweightCharts) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Failed to load chart library'));
-    document.head.appendChild(s);
-  });
-}
-
-async function initChart() {
-  const container = q('chart-container');
-  const msg       = q('chart-msg');
-  if (!container) return;
-
-  if (!ST.accessToken || !ST.workerUrl) {
-    msg.innerHTML = '<span>Connect to Upstox first</span><span style="font-size:11px;color:var(--dim)">Setup tab → Connect</span>';
-    return;
-  }
-
-  msg.innerHTML = '<span style="color:var(--amber)">⏳ Loading chart library…</span>';
-
-  try {
-    await loadLWCharts();
-    msg.innerHTML = '<span style="color:var(--amber)">⏳ Fetching candles…</span>';
-
-    if (_chartInstance) { _chartInstance.remove(); _chartInstance = null; _candleSeries = null; }
-
-    // Create chart
-    const h = container.clientHeight || (window.innerHeight - 160);
-    const w = container.clientWidth  || window.innerWidth;
-
-    _chartInstance = LightweightCharts.createChart(container, {
-      width:  w, height: h,
-      layout:     { background:{ color:'#08090d' }, textColor:'#4a6070' },
-      grid:       { vertLines:{ color:'#1e2d42' }, horzLines:{ color:'#1e2d42' } },
-      crosshair:  { mode: LightweightCharts.CrosshairMode.Normal },
-      timeScale:  { timeVisible:true, secondsVisible:false, borderColor:'#1e2d42',
-                    fixLeftEdge:false, fixRightEdge:false },
-      rightPriceScale: { borderColor:'#1e2d42' },
-      handleScroll:   { mouseWheel:true, pressedMouseMove:true, horzTouchDrag:true, vertTouchDrag:false },
-      handleScale:    { mouseWheel:true, pinch:true },
-    });
-
-    _candleSeries = _chartInstance.addCandlestickSeries({
-      upColor:'#00d478', downColor:'#ff2d55',
-      borderUpColor:'#00d478', borderDownColor:'#ff2d55',
-      wickUpColor:'#00d478', wickDownColor:'#ff2d55',
-    });
-
-    // Crosshair callback
-    _chartInstance.subscribeCrosshairMove(param => {
-      if (!param.time) {
-        q('chart-xhair-time').textContent = '';
-        q('chart-xhair-o').textContent = '';
-        q('chart-xhair-h').textContent = '';
-        q('chart-xhair-l').textContent = '';
-        q('chart-xhair-c').textContent = '';
-        return;
-      }
-      const bar = param.seriesData.get(_candleSeries);
-      if (!bar) return;
-      const dt  = new Date(param.time * 1000);
-      const istDt = new Date(dt.getTime() + 5.5*3600000);
-      const tStr  = `${String(istDt.getUTCHours()).padStart(2,'0')}:${String(istDt.getUTCMinutes()).padStart(2,'0')}`;
-      q('chart-xhair-time').textContent = tStr;
-      q('chart-xhair-o').textContent = `O:${bar.open?.toFixed(2)}`;
-      q('chart-xhair-h').textContent = `H:${bar.high?.toFixed(2)}`;
-      q('chart-xhair-l').textContent = `L:${bar.low?.toFixed(2)}`;
-      q('chart-xhair-c').textContent = `C:${bar.close?.toFixed(2)}`;
-    });
-
-    // Resize observer
-    new ResizeObserver(() => {
-      if (_chartInstance && container.clientWidth > 0) {
-        _chartInstance.applyOptions({ width:container.clientWidth, height:container.clientHeight });
-      }
-    }).observe(container);
-
-    msg.style.display = 'none';
-    await fetchChartData();
-
-    // Full history every 60s, live bar every 1s
-    clearInterval(_chartFullTimer); clearInterval(_chartLiveTimer);
-    _chartFullTimer = setInterval(() => {
-      if (q('t-chart')?.classList.contains('on')) fetchChartData();
-    }, 60000);
-    _chartLiveTimer = setInterval(() => {
-      if (q('t-chart')?.classList.contains('on')) fetchLiveBar();
-    }, 1000);
-
-  } catch(e) {
-    msg.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
-  }
-}
-
-async function fetchLiveBar() {
-  if (!_candleSeries || !ST.accessToken || !ST.workerUrl) return;
-  try {
-    const url = ST.workerUrl.replace(/\/$/,'')
-      + '/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050';
-    const r = await fetch(url, {
-      headers:{ 'Authorization':`Bearer ${ST.accessToken}`, 'Accept':'application/json', 'Api-Version':'2.0' }
-    });
-    const d = await r.json();
-    const ltp = parseFloat(Object.values(d?.data||{})[0]?.last_price);
-    if (!ltp || isNaN(ltp)) return;
-
-    // Current minute start in IST-shifted Unix seconds (matches chart candle times)
-    const IST_OFFSET = 19800;
-    const minStart = Math.floor(Date.now() / 60000) * 60 + IST_OFFSET;
-
-    if (!_liveCandle || _liveCandle.time !== minStart) {
-      // New minute — start fresh live candle
-      _liveCandle = { time:minStart, open:ltp, high:ltp, low:ltp, close:ltp };
-    } else {
-      // Update forming candle
-      _liveCandle = {
-        time:  minStart,
-        open:  _liveCandle.open,
-        high:  Math.max(_liveCandle.high, ltp),
-        low:   Math.min(_liveCandle.low,  ltp),
-        close: ltp,
-      };
-    }
-
-    _candleSeries.update(_liveCandle);
-
-    // Update price display
-    const last = _liveCandle;
-    const priceEl = q('chart-price');
-    if (priceEl) {
-      priceEl.textContent = ltp.toFixed(2);
-      priceEl.style.color = ltp >= last.open ? 'var(--green)' : 'var(--red)';
-    }
-  } catch(_) {}
-}
-
-async function fetchChartData() {
-  if (!_candleSeries || !ST.accessToken || !ST.workerUrl) return;
-  const btn = q('chart-refresh-btn');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-  try {
-    const url = ST.workerUrl.replace(/\/$/,'')
-      + '/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute';
-    const r = await fetch(url, {
-      headers:{ 'Authorization':`Bearer ${ST.accessToken}`, 'Accept':'application/json', 'Api-Version':'2.0' }
-    });
-    const d = await r.json();
-    const IST_OFFSET = 19800; // 5h30m in seconds — shifts chart display to IST
-    const candles = (d?.data?.candles||[]).map(row => ({
-      time:  Math.floor(new Date(row[0]).getTime()/1000) + IST_OFFSET,
-      open:  row[1], high: row[2], low: row[3], close: row[4]
-    })).sort((a,b) => a.time - b.time);
-
-    if (!candles.length) return;
-    _candleSeries.setData(candles);
-    _liveCandle = null; // reset so live bar restarts from current LTP
-    _chartInstance?.timeScale().scrollToRealTime();
-
-    // Update price display
-    const last = candles[candles.length-1];
-    const first = candles[0];
-    const chg   = last.close - first.open;
-    const pct   = (chg / first.open * 100);
-    const el    = q('chart-price');
-    if (el) { el.textContent = last.close.toFixed(2); el.style.color = chg>=0?'var(--green)':'var(--red)'; }
-    const ce = q('chart-change');
-    if (ce) { ce.textContent = `${chg>=0?'+':''}${chg.toFixed(2)} (${pct>=0?'+':''}${pct.toFixed(2)}%)`; ce.style.color = chg>=0?'var(--green)':'var(--red)'; }
-
-  } catch(e) {
-    const msg = q('chart-msg');
-    if (msg) { msg.style.display='flex'; msg.innerHTML=`<span style="color:var(--red)">❌ ${e.message}</span>`; }
-  }
-  if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
-}
 
 // ── Start the app ─────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
@@ -3982,14 +3776,95 @@ function initAuto1Module() {
   a1PatchSaveSlot();
 }
 
-// Override go() to init chart on first open
-(function(){
-  const _orig = go;
-  window.go = function(tab) {
-    _orig(tab);
-    if (tab === 'chart' && !_chartInstance) setTimeout(initChart, 60);
+
+// ══════════════════════════════════════════════════
+//  SLOT BACKUP / RESTORE — Auto tab + Auto1 tab
+//  Export: downloads slots as a timestamped JSON file
+//  Import: reads JSON file, merges or replaces slots
+// ══════════════════════════════════════════════════
+
+// ── AUTO TAB ─────────────────────────────────────
+function autoExportSlots() {
+  if (!autoSlots.length) { alert('No slots to export'); return; }
+  const payload = {
+    type: 'auto_slots_backup',
+    exportedAt: new Date(Date.now()+5.5*3600000).toISOString().replace('T',' ').slice(0,19)+' IST',
+    count: autoSlots.length,
+    slots: autoSlots,
   };
-})();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `auto_slots_backup_${getISTDate()}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  lg(`Auto: exported ${autoSlots.length} slots`, 'i');
+}
+
+function autoImportSlots(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const slots = data.slots || (Array.isArray(data) ? data : null);
+      if (!slots || !Array.isArray(slots)) throw new Error('Invalid backup file');
+      if (!confirm(`Import ${slots.length} slots? This will REPLACE your current Auto slots.`)) return;
+      autoSlots = slots;
+      localStorage.setItem('auto_slots_v1', JSON.stringify(autoSlots));
+      renderAutoSlots();
+      lg(`Auto: imported ${slots.length} slots from ${file.name}`, 's');
+      alert(`✅ ${slots.length} slots restored successfully`);
+    } catch(err) {
+      alert(`❌ Import failed: ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';  // reset so same file can be re-imported if needed
+}
+
+// ── AUTO1 / SR TAB ────────────────────────────────
+function a1ExportSlots() {
+  if (!a1Slots.length) { alert('No SR slots to export'); return; }
+  const payload = {
+    type: 'a1_slots_backup',
+    exportedAt: new Date(Date.now()+5.5*3600000).toISOString().replace('T',' ').slice(0,19)+' IST',
+    count: a1Slots.length,
+    slots: a1Slots,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `sr_slots_backup_${getISTDate()}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  lg(`SR: exported ${a1Slots.length} slots`, 'i');
+}
+
+function a1ImportSlots(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const slots = data.slots || (Array.isArray(data) ? data : null);
+      if (!slots || !Array.isArray(slots)) throw new Error('Invalid backup file');
+      if (!confirm(`Import ${slots.length} SR slots? This will REPLACE your current SR slots.`)) return;
+      a1Slots = slots;
+      a1Save();
+      a1SyncGlobalPanel();
+      a1Render();
+      lg(`SR: imported ${slots.length} slots from ${file.name}`, 's');
+      alert(`✅ ${slots.length} SR slots restored successfully`);
+    } catch(err) {
+      alert(`❌ Import failed: ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
 
 </script>
 <!-- ══ SLOT EDITOR MODAL ══════════════════════════════ -->
@@ -4087,6 +3962,499 @@ function initAuto1Module() {
     </div>
   </div>
 </div>
+
+<!-- ══ BACKTEST TAB ══════════════════════════════ -->
+<div class="tab" id="t-bt">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Daily Strategy Replay</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px" id="bt-subtitle">Simulates all SR slots on today's actual 1-min candles</div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onclick="btRun()" id="bt-run-btn"
+        style="background:var(--blue);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        ▶ Run
+      </button>
+      <button onclick="btExport()"
+        style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.25);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        ↓ Export
+      </button>
+    </div>
+  </div>
+
+  <!-- Info banner -->
+  <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:var(--r);padding:9px 12px;font-size:11px;color:var(--dim);line-height:1.5;margin-bottom:10px">
+    <b style="color:var(--amber)">How it works:</b> After each slot's exit time passes, candles are fetched automatically and that slot is simulated on actual OHLC data — giving you a live theoretical P&L as the day progresses. Tap ▶ Run anytime to refresh all completed slots. Results stored for 90 days with CSV export.
+  </div>
+
+  <!-- Summary cards row -->
+  <div id="bt-summary" style="display:none;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--green)" id="bt-sum-pnl">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Theory P&L (pts)</div>
+      </div>
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--blue)" id="bt-sum-fired">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Slots Fired</div>
+      </div>
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--amber)" id="bt-sum-win">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Winners</div>
+      </div>
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--purple)" id="bt-sum-wr">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Win Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slot results list -->
+  <div id="bt-slot-list">
+    <div style="text-align:center;padding:40px 20px;color:var(--dim);font-size:12px">
+      Tap ▶ Run to simulate today's SR slots on live candle data.
+    </div>
+  </div>
+
+  <!-- Historical log -->
+  <div id="bt-history" style="margin-top:16px"></div>
+
+</div>
+
+// ══════════════════════════════════════════════════════════
+//  BACKTEST / DAILY REPLAY MODULE
+//  Fetches today's 1-min NIFTY spot candles from Upstox,
+//  simulates every SR slot's entry+bracket on actual OHLC,
+//  compares to what the engine actually executed.
+//  Stores 90 days in localStorage under 'bt_logs_v1'.
+// ══════════════════════════════════════════════════════════
+
+let _btCandles   = [];    // [{time:'HH:MM', open, high, low, close}]
+let _btRunning   = false;
+let _btAutoTimer = null;
+let _btCandleDate= null;  // IST date string for cached candles
+let btLogs       = {};    // { 'YYYY-MM-DD': { slots:[...], summary:{} } }
+
+const BT_KEY = 'bt_logs_v1';
+
+function btSave() {
+  // 90-day retention
+  const cutoff = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
+  for (const d of Object.keys(btLogs)) { if (d < cutoff) delete btLogs[d]; }
+  try { localStorage.setItem(BT_KEY, JSON.stringify(btLogs)); } catch(_) {}
+}
+
+function btLoad() {
+  try { btLogs = JSON.parse(localStorage.getItem(BT_KEY)||'{}'); } catch(_) { btLogs={}; }
+}
+
+// ── Fetch today's 1-min candles ───────────────────
+async function btFetchCandles() {
+  const url = ST.workerUrl.replace(/\/$/,'')
+    + '/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute';
+  const r = await fetch(url, {
+    headers:{ 'Authorization':`Bearer ${ST.accessToken}`,
+               'Accept':'application/json', 'Api-Version':'2.0' }
+  });
+  const d = await r.json();
+  const raw = d?.data?.candles || [];
+  // Convert to {time:'HH:MM', open, high, low, close}
+  return raw.map(row => {
+    const dt  = new Date(row[0]);
+    const ist = new Date(dt.getTime() + 5.5*3600000);
+    const hh  = String(ist.getUTCHours()).padStart(2,'0');
+    const mm  = String(ist.getUTCMinutes()).padStart(2,'0');
+    return { time:`${hh}:${mm}`, open:row[1], high:row[2], low:row[3], close:row[4] };
+  }).sort((a,b) => a.time.localeCompare(b.time));
+}
+
+// ── Time helpers ──────────────────────────────────
+function btTimeToMin(hhmm) {
+  const [h,m] = hhmm.replace(/:\d\d$/, '').split(':').map(Number);
+  return h*60+m;
+}
+
+function btGetCandle(candles, hhmm) {
+  const t = hhmm.slice(0,5);
+  return candles.find(c => c.time === t) || null;
+}
+
+// ── Simulate a single SR slot on candles ─────────
+// Returns { fired, direction, entryTime, entryPrice, exitTime,
+//           exitPrice, result, pnl_pts, reason }
+function btSimSlot(slot, candles) {
+  const entryHHMM = slot.entryTime.slice(0,5);
+  const exitHHMM  = slot.exitTime.slice(0,5);
+  const entryMin  = btTimeToMin(entryHHMM);
+  const exitMin   = btTimeToMin(exitHHMM);
+
+  // Build a candle map for condition evaluation
+  const candleMap = {};
+  candles.forEach(c => { candleMap[c.time] = c; });
+
+  // Evaluate condition sets (same logic as engine)
+  let direction = null;
+  for (const cs of (slot.conditionSets||[])) {
+    if (!cs.enabled) continue;
+    let allPass = true;
+    for (const cond of (cs.conditions||[])) {
+      if (!cond.enabled) continue;
+      const lt = cond.leftTime.slice(0,5);
+      const lc = candleMap[lt];
+      if (!lc) { allPass=false; break; }
+      const lv = lc[cond.leftField] || lc.close;
+      let rv;
+      if (cond.rightType==='candle') {
+        const rt=cond.rightTime.slice(0,5);
+        const rc=candleMap[rt];
+        if (!rc) { allPass=false; break; }
+        rv=(rc[cond.rightField]||rc.close) + (cond.offsetPts||0);
+      } else if (cond.rightType==='indicator') {
+        // Compute SMA/EMA from available candles up to leftTime
+        const closes = candles.filter(c=>c.time<=lt).map(c=>c.close);
+        rv = btCalcIndicator(cond.rightField, closes) + (cond.offsetPts||0);
+        if (rv===null) { allPass=false; break; }
+      } else {
+        rv = (cond.rightValue||0) + (cond.offsetPts||0);
+      }
+      const pass = cond.op==='>' ? lv>rv : cond.op==='<' ? lv<rv :
+                   cond.op==='>='? lv>=rv: cond.op==='<='? lv<=rv:
+                   cond.op==='='? Math.abs(lv-rv)<0.01 : false;
+      if (!pass) { allPass=false; break; }
+    }
+    if (allPass && cs.direction) { direction=cs.direction; break; }
+  }
+
+  if (!direction) return { fired:false, slot:slot.name, entryTime:entryHHMM, direction:null, result:'PASS', pnl_pts:0, reason:'Conditions not met' };
+
+  // Get entry candle
+  const entryCandle = btGetCandle(candles, entryHHMM);
+  if (!entryCandle) return { fired:false, slot:slot.name, entryTime:entryHHMM, direction, result:'NO_DATA', pnl_pts:0, reason:'No candle at entry time' };
+
+  const entryPrice = entryCandle.open;
+  const isLong     = direction==='CE';
+  const tpTarget   = entryPrice + (isLong ? 10 : -10);
+  const slTarget   = entryPrice + (isLong ? -10 : 10);
+  const optTP      = slot.tgt || 5;
+  const optSL      = slot.sl  || 5;
+
+  // Walk candles from entry to exit
+  const window = candles.filter(c => c.time >= entryHHMM && c.time <= exitHHMM);
+  let result='TIMEOUT', exitPrice=null, exitTime=exitHHMM, pnl_pts=0, reason='';
+
+  for (const c of window.slice(1)) {  // skip entry candle itself
+    if (isLong) {
+      if (c.low  <= slTarget) { result='SL';  exitPrice=slTarget; exitTime=c.time; pnl_pts=-optSL; reason=`SL hit @ ${slTarget.toFixed(0)}`; break; }
+      if (c.high >= tpTarget) { result='TP';  exitPrice=tpTarget; exitTime=c.time; pnl_pts=+optTP; reason=`TP hit @ ${tpTarget.toFixed(0)}`; break; }
+    } else {
+      if (c.high >= slTarget) { result='SL';  exitPrice=slTarget; exitTime=c.time; pnl_pts=-optSL; reason=`SL hit @ ${slTarget.toFixed(0)}`; break; }
+      if (c.low  <= tpTarget) { result='TP';  exitPrice=tpTarget; exitTime=c.time; pnl_pts=+optTP; reason=`TP hit @ ${tpTarget.toFixed(0)}`; break; }
+    }
+  }
+
+  if (result==='TIMEOUT') {
+    const lastC = window[window.length-1];
+    exitPrice   = lastC?.close || entryPrice;
+    const spotMove = isLong ? (exitPrice-entryPrice) : (entryPrice-exitPrice);
+    pnl_pts = Math.max(spotMove*0.5, -optSL);
+    reason  = `Timeout exit @ ${exitPrice?.toFixed(0)}`;
+  }
+
+  return {
+    fired:true, slot:slot.name, direction,
+    entryTime:entryHHMM, entryPrice:entryPrice.toFixed(2),
+    exitTime, exitPrice:exitPrice?.toFixed(2),
+    result, pnl_pts:parseFloat(pnl_pts.toFixed(2)), reason,
+    spotTP:10, spotSL:10, optTP, optSL,
+  };
+}
+
+function btCalcIndicator(name, closes) {
+  if (!closes.length) return null;
+  const m = name.match(/^(sma|ema)(\d+)$/);
+  if (!m) return null;
+  const period = parseInt(m[2]);
+  const win    = closes.slice(-period);
+  if (m[1]==='sma') return win.reduce((a,b)=>a+b,0)/win.length;
+  const k=2/(period+1); let e=win[0];
+  for (let i=1;i<win.length;i++) e=win[i]*k+e*(1-k);
+  return e;
+}
+
+// ── Main run function ─────────────────────────────
+async function btRun() {
+  if (_btRunning) return;
+  if (!ST.accessToken||!ST.workerUrl) { alert('Connect to Upstox first'); return; }
+
+  _btRunning = true;
+  const btn = q('bt-run-btn');
+  if (btn) { btn.textContent='⏳ Running…'; btn.disabled=true; }
+  q('bt-subtitle').textContent = 'Fetching candles…';
+
+  try {
+    _btCandles = await btFetchCandles();
+    if (!_btCandles.length) throw new Error('No candle data returned');
+
+    q('bt-subtitle').textContent = `Simulating ${a1Slots.filter(s=>s.enabled).length} slots…`;
+
+    const date    = getISTDate();
+    const results = [];
+    let totalPnl=0, fired=0, wins=0;
+
+    for (const slot of a1Slots) {
+      if (!slot.enabled) continue;
+      const r = btSimSlot(slot, _btCandles);
+      results.push(r);
+      if (r.fired) {
+        fired++;
+        totalPnl += r.pnl_pts;
+        if (r.result==='TP') wins++;
+      }
+    }
+
+    // Store in log
+    btLogs[date] = {
+      date, candles:_btCandles.length,
+      slots: results,
+      summary: { totalPnl, fired, wins, wr: fired>0 ? Math.round(wins/fired*100) : 0 }
+    };
+    btSave();
+
+    btRenderToday(date);
+    btRenderHistory();
+    q('bt-subtitle').textContent = `Last run: ${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} · ${_btCandles.length} candles`;
+
+  } catch(e) {
+    q('bt-slot-list').innerHTML = `<div style="color:var(--red);padding:20px;font-size:12px">❌ ${e.message}</div>`;
+    q('bt-subtitle').textContent = 'Run failed — check connection';
+  } finally {
+    _btRunning=false;
+    if (btn) { btn.textContent='▶ Run'; btn.disabled=false; }
+  }
+}
+
+// ── Render today's results ────────────────────────
+function btRenderToday(date) {
+  const log = btLogs[date];
+  if (!log) return;
+  const s = log.summary;
+
+  // Summary cards
+  const pnlEl = q('bt-sum-pnl');
+  if (pnlEl) {
+    pnlEl.textContent = (s.totalPnl>=0?'+':'')+s.totalPnl.toFixed(1);
+    pnlEl.style.color = s.totalPnl>=0?'var(--green)':'var(--red)';
+  }
+  const safeSet = (id, val) => { const el=q(id); if(el) el.textContent=val; };
+  safeSet('bt-sum-fired', s.fired);
+  safeSet('bt-sum-win',   s.wins);
+  safeSet('bt-sum-wr',    s.fired>0 ? s.wr+'%' : '—');
+  const sumEl = q('bt-summary');
+  if (sumEl) sumEl.style.display='block';
+
+  const resultColor = { TP:'var(--green)', SL:'var(--red)', TIMEOUT:'var(--amber)', PASS:'var(--dim)', NO_DATA:'var(--dim)' };
+  const resultLabel = { TP:'✅ TP HIT', SL:'❌ SL HIT', TIMEOUT:'⏱ TIMEOUT', PASS:'⏭ PASS (no signal)', NO_DATA:'⚠️ NO DATA' };
+
+  q('bt-slot-list').innerHTML = `
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">
+      TODAY — ${date}
+    </div>
+    ${log.slots.map(r => `
+    <div class="card" style="margin-bottom:8px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:700">${r.slot}</span>
+        <span style="font-size:11px;font-weight:700;color:${resultColor[r.result]||'var(--dim)'}">
+          ${resultLabel[r.result]||r.result}
+        </span>
+      </div>
+      ${r.fired ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px">
+          <div style="font-size:10px;color:var(--dim)">Dir<br><b style="color:${r.direction==='CE'?'var(--green)':'var(--red)'}">BUY ${r.direction}</b></div>
+          <div style="font-size:10px;color:var(--dim)">Entry<br><b>${r.entryTime} @ ${r.entryPrice}</b></div>
+          <div style="font-size:10px;color:var(--dim)">Exit<br><b>${r.exitTime} @ ${r.exitPrice||'—'}</b></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;color:var(--dim)">${r.reason}</span>
+          <span style="font-size:14px;font-weight:700;color:${r.pnl_pts>0?'var(--green)':r.pnl_pts<0?'var(--red)':'var(--dim)'}">
+            ${r.pnl_pts>0?'+':''}${r.pnl_pts} pts
+          </span>
+        </div>
+      ` : `
+        <div style="font-size:11px;color:var(--dim)">${r.reason}</div>
+      `}
+    </div>`).join('')}`;
+}
+
+// ── Render history section ────────────────────────
+function btRenderHistory() {
+  const el = q('bt-history');
+  if (!el) return;
+  const dates = Object.keys(btLogs).sort().reverse();
+  if (dates.length <= 1) { el.innerHTML=''; return; }
+
+  el.innerHTML = `
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">
+      HISTORY (${dates.length} days)
+    </div>
+    ${dates.map(date => {
+      const log = btLogs[date];
+      const s   = log.summary;
+      const pnlColor = s.totalPnl>=0?'var(--green)':'var(--red)';
+      return `
+      <div class="card" style="margin-bottom:6px;padding:10px 12px" onclick="btToggleDay('${date}')" style="cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-size:12px;font-weight:600">${date}</span>
+            <span style="font-size:10px;color:var(--dim);margin-left:8px">${s.fired} fired · ${s.wins}W/${s.fired-s.wins}L · WR ${s.wr}%</span>
+          </div>
+          <span style="font-size:14px;font-weight:700;color:${pnlColor}">${s.totalPnl>=0?'+':''}${s.totalPnl.toFixed(1)} pts</span>
+        </div>
+        <div id="bt-day-${date}" style="display:none;margin-top:8px;border-top:1px solid var(--bdr);padding-top:8px">
+          ${log.slots.filter(r=>r.fired).map(r=>`
+            <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px">
+              <span style="color:var(--dim)">${r.slot} <span style="color:${r.direction==='CE'?'var(--green)':'var(--red)'}">${r.direction||''}</span></span>
+              <span style="color:${r.result==='TP'?'var(--green)':r.result==='SL'?'var(--red)':'var(--amber)'}">
+                ${r.result} ${r.pnl_pts>0?'+':''}${r.pnl_pts}pts
+              </span>
+            </div>`).join('')}
+          ${log.slots.filter(r=>!r.fired).map(r=>`
+            <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px">
+              <span style="color:var(--dim)">${r.slot}</span>
+              <span style="color:var(--dim)">PASS</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+function btToggleDay(date) {
+  const el = q(`bt-day-${date}`);
+  if (el) el.style.display = el.style.display==='none'?'block':'none';
+}
+
+// ── Export all logs as CSV ────────────────────────
+function btExport() {
+  const dates = Object.keys(btLogs).sort();
+  if (!dates.length) { alert('No data to export yet'); return; }
+
+  const rows = ['Date,Slot,Fired,Direction,EntryTime,EntryPrice,ExitTime,ExitPrice,Result,PnL_pts,Reason'];
+  for (const date of dates) {
+    for (const r of (btLogs[date]?.slots||[])) {
+      rows.push([
+        date, r.slot, r.fired?'YES':'NO',
+        r.direction||'—', r.entryTime||'—', r.entryPrice||'—',
+        r.exitTime||'—', r.exitPrice||'—',
+        r.result||'—', r.pnl_pts||0,
+        `"${(r.reason||'').replace(/"/g,"'")}"`
+      ].join(','));
+    }
+  }
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download=`942_backtest_${dates[0]}_to_${dates[dates.length-1]}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  lg(`BT: exported ${dates.length} days of backtest data`, 'i');
+}
+
+// ── Live per-slot evaluation ──────────────────────
+// Checks every 60s. When a slot's exit time just passed,
+// fetches fresh candles and evaluates that slot immediately.
+// Also does a full re-run at 15:32 to catch anything missed.
+
+let _btEvaluated = new Set();   // slot IDs already evaluated today
+
+function btScheduleAutoRun() {
+  clearInterval(_btAutoTimer);
+
+  // Reset evaluated set at midnight IST
+  const resetEvaluated = () => {
+    const today = getISTDate();
+    if (_btLastDate && _btLastDate !== today) _btEvaluated.clear();
+    _btLastDate = today;
+  };
+
+  _btAutoTimer = setInterval(async () => {
+    if (!ST.accessToken || !ST.workerUrl) return;
+    resetEvaluated();
+
+    const now   = new Date(Date.now() + 5.5*3600000);
+    const hhmm  = `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}`;
+    const today = getISTDate();
+
+    // Check each enabled SR slot — evaluate it the minute after its exit time
+    let anyNew = false;
+    for (const slot of a1Slots) {
+      if (!slot.enabled) continue;
+      const exitHHMM = slot.exitTime.slice(0,5);  // 'HH:MM'
+      const slotKey  = `${today}_${slot.id}`;
+
+      // Slot is ready to evaluate if current time > exit time AND not yet done today
+      if (hhmm > exitHHMM && !_btEvaluated.has(slotKey)) {
+        // Fetch candles if we don't have today's yet (or they're stale)
+        if (!_btCandles.length || _btCandleDate !== today) {
+          try {
+            _btCandles    = await btFetchCandles();
+            _btCandleDate = today;
+          } catch(_) { continue; }
+        }
+        if (!_btCandles.length) continue;
+
+        // Simulate just this slot
+        const result = btSimSlot(slot, _btCandles);
+        _btEvaluated.add(slotKey);
+        anyNew = true;
+
+        // Store/update in logs
+        if (!btLogs[today]) btLogs[today] = { date:today, candles:_btCandles.length, slots:[], summary:{totalPnl:0,fired:0,wins:0,wr:0} };
+        // Replace or add this slot's result
+        const existing = btLogs[today].slots.findIndex(r => r.slot === slot.name);
+        if (existing >= 0) btLogs[today].slots[existing] = result;
+        else btLogs[today].slots.push(result);
+
+        // Recompute summary
+        const fired  = btLogs[today].slots.filter(r=>r.fired);
+        const wins   = fired.filter(r=>r.result==='TP').length;
+        const totPnl = fired.reduce((s,r)=>s+r.pnl_pts,0);
+        btLogs[today].summary = {
+          totalPnl: parseFloat(totPnl.toFixed(2)),
+          fired: fired.length, wins,
+          wr: fired.length>0 ? Math.round(wins/fired.length*100) : 0
+        };
+
+        btSave();
+
+        // Notify if BT tab open
+        lg(`BT: ${slot.name} → ${result.fired ? result.result+' '+result.pnl_pts+'pts' : 'PASS (no signal)'}`, result.fired&&result.result==='TP'?'s':result.fired&&result.result==='SL'?'e':'i');
+      }
+    }
+
+    if (anyNew && q('t-bt')?.classList.contains('on')) {
+      btRenderToday(today);
+      btRenderHistory();
+    }
+
+  }, 60000);  // check every 60 seconds
+}
+
+let _btLastDate    = null;
+let _btCandleDate  = null;   // date string for which _btCandles were fetched
+
+// ── Init ──────────────────────────────────────────
+function initBtModule() {
+  btLoad();
+  _btLastDate = getISTDate();
+  // Show most recent day if available
+  const dates = Object.keys(btLogs).sort().reverse();
+  if (dates.length) {
+    btRenderToday(dates[0]);
+    btRenderHistory();
+    q('bt-subtitle').textContent = `Last run: ${dates[0]} · Live updates every 60s`;
+  }
+  btScheduleAutoRun();
+}
 
 </body>
 </html>
