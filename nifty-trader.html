@@ -4058,24 +4058,26 @@ function btLoad() {
 
 // ── Fetch candles for a specific date ────────────
 async function btFetchCandlesForDate(dateStr) {
-  // dateStr = 'YYYY-MM-DD'
-  // Upstox historical candle API: /v2/historical-candle/{key}/{interval}/{to_date}/{from_date}
-  const key  = 'NSE_INDEX%7CNifty%2050';
-  const url  = ST.workerUrl.replace(/\/$/,'')
-    + `/v2/historical-candle/${key}/1minute/${dateStr}/${dateStr}`;
-  const r = await fetch(url, {
-    headers:{ 'Authorization':`Bearer ${ST.accessToken}`,
-               'Accept':'application/json', 'Api-Version':'2.0' }
-  });
-  const d = await r.json();
-  const raw = d?.data?.candles || [];
+  // Upstox v2 historical candle: /v2/historical-candle/{key}/{interval}/{to_date}/{from_date}
+  // For a single day, to_date = next calendar day, from_date = the target date
+  const from = dateStr;
+  // Compute next day
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  const to = d.toISOString().slice(0, 10);
+
+  const key  = encodeURIComponent('NSE_INDEX|Nifty 50');
+  const path = `/v2/historical-candle/${key}/1minute/${to}/${from}`;
+  const resp = await upstox(path);
+  const raw  = resp?.data?.candles || [];
+  if (!raw.length) throw new Error(`No candle data returned for ${dateStr}`);
   return raw.map(row => {
     const dt  = new Date(row[0]);
-    const ist = new Date(dt.getTime() + 5.5*3600000);
-    const hh  = String(ist.getUTCHours()).padStart(2,'0');
-    const mm  = String(ist.getUTCMinutes()).padStart(2,'0');
-    return { time:`${hh}:${mm}`, open:row[1], high:row[2], low:row[3], close:row[4] };
-  }).sort((a,b) => a.time.localeCompare(b.time));
+    const ist = new Date(dt.getTime() + 5.5 * 3600000);
+    const hh  = String(ist.getUTCHours()).padStart(2, '0');
+    const mm  = String(ist.getUTCMinutes()).padStart(2, '0');
+    return { time: `${hh}:${mm}`, open: row[1], high: row[2], low: row[3], close: row[4] };
+  }).sort((a, b) => a.time.localeCompare(b.time));
 }
 
 // ── Get yesterday's IST date string ─────────────
@@ -4145,15 +4147,13 @@ async function btRunDate(when) {
     if (ydayBtn) { ydayBtn.textContent='◀ Yesterday'; ydayBtn.disabled=false; }
   }
 }
-  const url = ST.workerUrl.replace(/\/$/,'')
-    + '/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute';
-  const r = await fetch(url, {
-    headers:{ 'Authorization':`Bearer ${ST.accessToken}`,
-               'Accept':'application/json', 'Api-Version':'2.0' }
-  });
-  const d = await r.json();
-  const raw = d?.data?.candles || [];
-  // Convert to {time:'HH:MM', open, high, low, close}
+}
+
+// ── Fetch today's intraday candles ────────────────
+async function btFetchCandles() {
+  const resp = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute');
+  const raw  = resp?.data?.candles || [];
+  if (!raw.length) throw new Error('No intraday candle data returned');
   return raw.map(row => {
     const dt  = new Date(row[0]);
     const ist = new Date(dt.getTime() + 5.5*3600000);
