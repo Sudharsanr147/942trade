@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v2.8 · 25-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v2.9 · 25-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -4059,31 +4059,56 @@ function btLoad() {
   try { btLogs = JSON.parse(localStorage.getItem(BT_KEY)||'{}'); } catch(_) { btLogs={}; }
 }
 
-// ── Fetch candles for a specific date ────────────
-async function btFetchCandlesForDate(dateStr) {
-  // Upstox v2 historical candle: /v2/historical-candle/{key}/{interval}/{to_date}/{from_date}
-  // For a single day, to_date = next calendar day, from_date = the target date
-  const from = dateStr;
-  // Compute next day
-  const d = new Date(dateStr + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + 1);
-  const to = d.toISOString().slice(0, 10);
-
-  const key  = encodeURIComponent('NSE_INDEX|Nifty 50');
-  const path = `/v2/historical-candle/${key}/1minute/${to}/${from}`;
-  const resp = await upstox(path);
-  const raw  = resp?.data?.candles || [];
-  if (!raw.length) throw new Error(`No candle data returned for ${dateStr}`);
-  return raw.map(row => {
-    const dt  = new Date(row[0]);
-    const ist = new Date(dt.getTime() + 5.5 * 3600000);
-    const hh  = String(ist.getUTCHours()).padStart(2, '0');
-    const mm  = String(ist.getUTCMinutes()).padStart(2, '0');
-    return { time: `${hh}:${mm}`, open: row[1], high: row[2], low: row[3], close: row[4] };
-  }).sort((a, b) => a.time.localeCompare(b.time));
+// ── Direct Upstox API fetch (bypasses VM — CORS supported) ──
+async function btUpstoxDirect(path) {
+  const url = 'https://api.upstox.com' + path;
+  const r = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${ST.accessToken}`,
+      'Accept': 'application/json',
+      'Api-Version': '2.0',
+    }
+  });
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(json?.errors?.[0]?.message || json?.message || `HTTP ${r.status}`);
+  return json;
 }
 
-// ── Get yesterday's IST date string ─────────────
+// ── Fetch candles for a specific date ────────────
+async function btFetchCandlesForDate(dateStr) {
+  // /v2/historical-candle/{key}/{interval}/{to_date}/{from_date}
+  // to_date must be AFTER the target date for intraday 1-min data
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  const to   = d.toISOString().slice(0, 10);
+  const from = dateStr;
+  const key  = encodeURIComponent('NSE_INDEX|Nifty 50');
+  const resp = await btUpstoxDirect(`/v2/historical-candle/${key}/1minute/${to}/${from}`);
+  const raw  = resp?.data?.candles || [];
+  if (!raw.length) throw new Error(`No candle data for ${dateStr} — market may have been closed`);
+  return raw.map(row => {
+    const ist = new Date(new Date(row[0]).getTime() + 5.5*3600000);
+    return {
+      time:  `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}`,
+      open:row[1], high:row[2], low:row[3], close:row[4]
+    };
+  }).sort((a,b) => a.time.localeCompare(b.time));
+}
+
+// ── Fetch today's intraday candles ────────────────
+async function btFetchCandles() {
+  const key  = encodeURIComponent('NSE_INDEX|Nifty 50');
+  const resp = await btUpstoxDirect(`/v2/historical-candle/intraday/${key}/1minute`);
+  const raw  = resp?.data?.candles || [];
+  if (!raw.length) throw new Error('No intraday candle data — market may not have opened yet');
+  return raw.map(row => {
+    const ist = new Date(new Date(row[0]).getTime() + 5.5*3600000);
+    return {
+      time:  `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}`,
+      open:row[1], high:row[2], low:row[3], close:row[4]
+    };
+  }).sort((a,b) => a.time.localeCompare(b.time));
+}
 function btYesterday() {
   const now = new Date(Date.now() + 5.5*3600000);
   now.setUTCDate(now.getUTCDate()-1);
@@ -4152,18 +4177,6 @@ async function btRunDate(when) {
 }
 
 // ── Fetch today's intraday candles ────────────────
-async function btFetchCandles() {
-  const resp = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute');
-  const raw  = resp?.data?.candles || [];
-  if (!raw.length) throw new Error('No intraday candle data returned');
-  return raw.map(row => {
-    const dt  = new Date(row[0]);
-    const ist = new Date(dt.getTime() + 5.5*3600000);
-    const hh  = String(ist.getUTCHours()).padStart(2,'0');
-    const mm  = String(ist.getUTCMinutes()).padStart(2,'0');
-    return { time:`${hh}:${mm}`, open:row[1], high:row[2], low:row[3], close:row[4] };
-  }).sort((a,b) => a.time.localeCompare(b.time));
-}
 
 // ── Time helpers ──────────────────────────────────
 function btTimeToMin(hhmm) {
