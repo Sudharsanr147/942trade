@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.0 · 25-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.1 · 25-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -3935,105 +3935,8 @@ function a1ImportSlots(event) {
   event.target.value = '';
 }
 
-</script>
-<!-- ══ SLOT EDITOR MODAL ══════════════════════════════ -->
-<div id="slot-modal-overlay">
-<div id="slot-modal">
-  <div id="slot-modal-hdr">
-    <button class="sm-close" onclick="closeSlotEditor()">✕</button>
-    <h3 id="slot-modal-title">New Strategy Slot</h3>
-    <button onclick="runSlotValidation()" style="background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.3);border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap">⚠ Check</button>
-    <button onclick="saveSlot()" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
-  </div>
-  <div id="slot-modal-body">
-    <input type="hidden" id="se-id">
-    <div style="margin-bottom:10px"><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Slot Name</label>
-      <input id="se-name" type="text" placeholder="e.g. Morning Breakout" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Timing</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Entry Time</label>
-        <input id="se-entry" type="time" step="1" value="09:42:45" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;appearance:none"></div>
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Exit Time</label>
-        <input id="se-exit" type="time" step="1" value="10:15:00" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;appearance:none"></div>
-    </div>
-    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Strategy Parameters</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">OTM Strikes</label><input id="se-otm" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Strike Step</label><input id="se-step" type="number" value="50" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">SL (pts)</label><input id="se-sl" type="number" value="30" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-    </div>
-    <div style="margin-bottom:8px"><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Target (pts)</label><input id="se-tgt" type="number" value="50" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Position Size</div>
-    <div class="lots-mode" id="se-lots-mode">
-      <button class="on" id="se-lm-manual" onclick="seLotsMode('manual')">✋ Manual Lots</button>
-      <button id="se-lm-auto" onclick="seLotsMode('auto')">💰 Auto from Balance</button>
-    </div>
-    <div id="se-lots-manual" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lots</label><input id="se-lots" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize" type="number" value="65" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-    </div>
-    <div id="se-lots-auto" style="display:none;gap:8px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Deploy % of balance</label><input id="se-deploy" type="number" value="90" oninput="seUpdateFloorCalc()" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize2" type="number" value="65" oninput="seUpdateFloorCalc()" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
-      </div>
-      <!-- Floor Premium -->
-      <div style="margin-top:8px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px">
-        <label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">
-          Floor Premium ₹ <span style="color:var(--amber);font-size:10px">optional</span>
-        </label>
-        <input id="se-floor-premium" type="number" min="0" value="0" placeholder="0 = disabled"
-          oninput="seUpdateFloorCalc()"
-          style="width:100%;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r);padding:9px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;margin-bottom:8px">
-        <div id="se-floor-hint" style="font-size:11px;color:var(--dim);line-height:1.6">
-          When actual instrument price &lt; floor, <b>floor</b> is used for lot sizing (conservative).<br>
-          e.g. Deploy 95% of ₹20,000, floor ₹60, lot size 65 → <b style="color:var(--txt)">floor(19000 ÷ 3900) = 4 lots</b>
-        </div>
-        <div id="se-floor-calc" style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--purple);display:none"></div>
-      </div>
-    </div>
-    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px">Condition Sets</div>
-    <div style="background:rgba(124,92,255,.05);border:1px solid rgba(124,92,255,.15);border-radius:var(--r);padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:10px">
-      Sets evaluated <b>top→bottom in priority order</b>. <b>First satisfied set</b> fires the trade in that direction. <b>No set satisfied → no trade.</b> Use ↑/↓ on sets to change priority.
-    </div>
-    <div id="se-cset-list"></div>
-    <button onclick="seAddSet()" style="display:block;width:100%;padding:9px;background:rgba(0,212,120,.06);color:var(--green);border:1px dashed rgba(0,212,120,.3);border-radius:var(--r);font-size:12px;cursor:pointer;margin-bottom:10px">+ Add Condition Set</button>
-    <div id="slot-conflict-panel"><div id="slot-conflict-items"></div></div>
-    <div style="border-top:1px solid var(--bdr);margin-top:14px;padding-top:14px">
-      <button id="se-btn-delete" onclick="deleteSlotFromEditor()" style="display:none;width:100%;padding:9px;background:transparent;color:var(--red);border:1px solid #2e1018;border-radius:var(--r);font-size:12px;cursor:pointer">Delete This Slot</button>
-    </div>
-  </div>
-</div>
-</div>
 
-<!-- Export Modal -->
-<div id="export-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:400;overflow-y:auto">
-  <div style="background:var(--s1);min-height:100dvh;padding:0">
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--bdr);position:sticky;top:0;background:var(--s1)">
-      <button onclick="q('export-overlay').style.display='none'"
-        style="width:30px;height:30px;border-radius:50%;background:var(--s3);border:none;color:var(--txt);font-size:16px;cursor:pointer">✕</button>
-      <span style="font-size:14px;font-weight:600;flex:1">Export Trade Logs</span>
-      <button onclick="copyExportData()"
-        style="background:var(--purple);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
-        📋 Copy All
-      </button>
-    </div>
-    <div style="padding:14px">
-      <div style="font-size:11px;color:var(--dim);margin-bottom:10px" id="export-info"></div>
-      <textarea id="export-data" readonly
-        style="width:100%;height:60vh;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);
-          color:var(--txt);font-family:var(--mono);font-size:10px;padding:12px;resize:none;outline:none;
-          -webkit-user-select:text;user-select:text">
-      </textarea>
-      <div style="margin-top:10px;font-size:11px;color:var(--dim)">
-        Select all text → Copy → Paste to Claude for analysis
-      </div>
-    </div>
-  </div>
-</div>
 
-// ══════════════════════════════════════════════════════════
-<script>
 //  BACKTEST / DAILY REPLAY MODULE
 //  Fetches today's 1-min NIFTY spot candles from Upstox,
 //  simulates every SR slot's entry+bracket on actual OHLC,
@@ -4566,5 +4469,103 @@ function initBtModule() {
 }
 
 </script>
+<!-- ══ SLOT EDITOR MODAL ══════════════════════════════ -->
+<div id="slot-modal-overlay">
+<div id="slot-modal">
+  <div id="slot-modal-hdr">
+    <button class="sm-close" onclick="closeSlotEditor()">✕</button>
+    <h3 id="slot-modal-title">New Strategy Slot</h3>
+    <button onclick="runSlotValidation()" style="background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.3);border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap">⚠ Check</button>
+    <button onclick="saveSlot()" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+  </div>
+  <div id="slot-modal-body">
+    <input type="hidden" id="se-id">
+    <div style="margin-bottom:10px"><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Slot Name</label>
+      <input id="se-name" type="text" placeholder="e.g. Morning Breakout" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Timing</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Entry Time</label>
+        <input id="se-entry" type="time" step="1" value="09:42:45" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;appearance:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Exit Time</label>
+        <input id="se-exit" type="time" step="1" value="10:15:00" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;appearance:none"></div>
+    </div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Strategy Parameters</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">OTM Strikes</label><input id="se-otm" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Strike Step</label><input id="se-step" type="number" value="50" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">SL (pts)</label><input id="se-sl" type="number" value="30" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    </div>
+    <div style="margin-bottom:8px"><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Target (pts)</label><input id="se-tgt" type="number" value="50" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px">Position Size</div>
+    <div class="lots-mode" id="se-lots-mode">
+      <button class="on" id="se-lm-manual" onclick="seLotsMode('manual')">✋ Manual Lots</button>
+      <button id="se-lm-auto" onclick="seLotsMode('auto')">💰 Auto from Balance</button>
+    </div>
+    <div id="se-lots-manual" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lots</label><input id="se-lots" type="number" value="1" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize" type="number" value="65" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+    </div>
+    <div id="se-lots-auto" style="display:none;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Deploy % of balance</label><input id="se-deploy" type="number" value="90" oninput="seUpdateFloorCalc()" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+        <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:5px">Lot Size</label><input id="se-lotsize2" type="number" value="65" oninput="seUpdateFloorCalc()" style="width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none"></div>
+      </div>
+      <!-- Floor Premium -->
+      <div style="margin-top:8px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px">
+        <label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">
+          Floor Premium ₹ <span style="color:var(--amber);font-size:10px">optional</span>
+        </label>
+        <input id="se-floor-premium" type="number" min="0" value="0" placeholder="0 = disabled"
+          oninput="seUpdateFloorCalc()"
+          style="width:100%;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r);padding:9px 12px;color:var(--txt);font-family:var(--mono);font-size:13px;outline:none;margin-bottom:8px">
+        <div id="se-floor-hint" style="font-size:11px;color:var(--dim);line-height:1.6">
+          When actual instrument price &lt; floor, <b>floor</b> is used for lot sizing (conservative).<br>
+          e.g. Deploy 95% of ₹20,000, floor ₹60, lot size 65 → <b style="color:var(--txt)">floor(19000 ÷ 3900) = 4 lots</b>
+        </div>
+        <div id="se-floor-calc" style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--purple);display:none"></div>
+      </div>
+    </div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px">Condition Sets</div>
+    <div style="background:rgba(124,92,255,.05);border:1px solid rgba(124,92,255,.15);border-radius:var(--r);padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:10px">
+      Sets evaluated <b>top→bottom in priority order</b>. <b>First satisfied set</b> fires the trade in that direction. <b>No set satisfied → no trade.</b> Use ↑/↓ on sets to change priority.
+    </div>
+    <div id="se-cset-list"></div>
+    <button onclick="seAddSet()" style="display:block;width:100%;padding:9px;background:rgba(0,212,120,.06);color:var(--green);border:1px dashed rgba(0,212,120,.3);border-radius:var(--r);font-size:12px;cursor:pointer;margin-bottom:10px">+ Add Condition Set</button>
+    <div id="slot-conflict-panel"><div id="slot-conflict-items"></div></div>
+    <div style="border-top:1px solid var(--bdr);margin-top:14px;padding-top:14px">
+      <button id="se-btn-delete" onclick="deleteSlotFromEditor()" style="display:none;width:100%;padding:9px;background:transparent;color:var(--red);border:1px solid #2e1018;border-radius:var(--r);font-size:12px;cursor:pointer">Delete This Slot</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Export Modal -->
+<div id="export-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:400;overflow-y:auto">
+  <div style="background:var(--s1);min-height:100dvh;padding:0">
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--bdr);position:sticky;top:0;background:var(--s1)">
+      <button onclick="q('export-overlay').style.display='none'"
+        style="width:30px;height:30px;border-radius:50%;background:var(--s3);border:none;color:var(--txt);font-size:16px;cursor:pointer">✕</button>
+      <span style="font-size:14px;font-weight:600;flex:1">Export Trade Logs</span>
+      <button onclick="copyExportData()"
+        style="background:var(--purple);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        📋 Copy All
+      </button>
+    </div>
+    <div style="padding:14px">
+      <div style="font-size:11px;color:var(--dim);margin-bottom:10px" id="export-info"></div>
+      <textarea id="export-data" readonly
+        style="width:100%;height:60vh;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);
+          color:var(--txt);font-family:var(--mono);font-size:10px;padding:12px;resize:none;outline:none;
+          -webkit-user-select:text;user-select:text">
+      </textarea>
+      <div style="margin-top:10px;font-size:11px;color:var(--dim)">
+        Select all text → Copy → Paste to Claude for analysis
+      </div>
+    </div>
+  </div>
+</div>
+
+// ══════════════════════════════════════════════════════════
+
 </body>
 </html>
