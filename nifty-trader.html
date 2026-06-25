@@ -820,61 +820,30 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
   </div>
 
-</div><!-- /#content -->
 
-<!-- ══ BOTTOM NAV ════════════════════════════════════ -->
-<div id="nav">
-  <button class="nb on" id="nav-setup"    onclick="go('setup')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
-    Setup
-  </button>
-  <button class="nb" id="nav-strategy" onclick="go('strategy')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-    Strategy
-  </button>
-  <button class="nb" id="nav-monitor"  onclick="go('monitor')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    Monitor
-  </button>
-  <button class="nb" id="nav-auto" onclick="go('auto')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-    Auto
-  </button>
-  <button class="nb" id="nav-auto1" onclick="go('auto1')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
-    Auto1
-  </button>
-  <button class="nb" id="nav-tradelog" onclick="go('tradelog')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-    Trades
-  </button>
-  <button class="nb" id="nav-bt" onclick="go('bt')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-    BT
-  </button>
-  <button class="nb" id="nav-log" onclick="go('log')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Log
-  </button>
-</div>
+  <!-- ══ BACKTEST TAB ════════════════════════════════ -->
 
-<!-- ══ BACKTEST TAB ══════════════════════════════ -->
-<div class="tab" id="t-bt">
+  <!-- ══ BACKTEST TAB ══════════════════════════════ -->
+  <div class="tab" id="t-bt">
 
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
     <div>
       <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Daily Strategy Replay</div>
-      <div style="font-size:11px;color:var(--dim);margin-top:2px" id="bt-subtitle">Simulates all SR slots on today's actual 1-min candles</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px" id="bt-subtitle">Simulates SR slots on actual 1-min candles</div>
     </div>
-    <div style="display:flex;gap:6px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="btRunDate('yesterday')" id="bt-yday-btn"
+        style="background:rgba(30,144,255,.12);border:1px solid rgba(30,144,255,.3);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+        ◀ Yesterday
+      </button>
       <button onclick="btRun()" id="bt-run-btn"
         style="background:var(--blue);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
-        ▶ Run
+        ▶ Today
       </button>
       <button onclick="btExport()"
-        style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.25);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
-        ↓ Export
+        style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.25);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+        ↓ CSV
       </button>
     </div>
   </div>
@@ -916,6 +885,44 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- Historical log -->
   <div id="bt-history" style="margin-top:16px"></div>
 
+  </div>
+
+</div><!-- /#content -->
+
+<!-- ══ BOTTOM NAV ════════════════════════════════════ -->
+<div id="nav">
+  <button class="nb on" id="nav-setup"    onclick="go('setup')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+    Setup
+  </button>
+  <button class="nb" id="nav-strategy" onclick="go('strategy')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    Strategy
+  </button>
+  <button class="nb" id="nav-monitor"  onclick="go('monitor')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Monitor
+  </button>
+  <button class="nb" id="nav-auto" onclick="go('auto')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    Auto
+  </button>
+  <button class="nb" id="nav-auto1" onclick="go('auto1')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
+    Auto1
+  </button>
+  <button class="nb" id="nav-tradelog" onclick="go('tradelog')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+    Trades
+  </button>
+  <button class="nb" id="nav-bt" onclick="go('bt')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+    BT
+  </button>
+  <button class="nb" id="nav-log" onclick="go('log')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    Log
+  </button>
 </div>
 
 </div><!-- /#app -->
@@ -4049,8 +4056,95 @@ function btLoad() {
   try { btLogs = JSON.parse(localStorage.getItem(BT_KEY)||'{}'); } catch(_) { btLogs={}; }
 }
 
-// ── Fetch today's 1-min candles ───────────────────
-async function btFetchCandles() {
+// ── Fetch candles for a specific date ────────────
+async function btFetchCandlesForDate(dateStr) {
+  // dateStr = 'YYYY-MM-DD'
+  // Upstox historical candle API: /v2/historical-candle/{key}/{interval}/{to_date}/{from_date}
+  const key  = 'NSE_INDEX%7CNifty%2050';
+  const url  = ST.workerUrl.replace(/\/$/,'')
+    + `/v2/historical-candle/${key}/1minute/${dateStr}/${dateStr}`;
+  const r = await fetch(url, {
+    headers:{ 'Authorization':`Bearer ${ST.accessToken}`,
+               'Accept':'application/json', 'Api-Version':'2.0' }
+  });
+  const d = await r.json();
+  const raw = d?.data?.candles || [];
+  return raw.map(row => {
+    const dt  = new Date(row[0]);
+    const ist = new Date(dt.getTime() + 5.5*3600000);
+    const hh  = String(ist.getUTCHours()).padStart(2,'0');
+    const mm  = String(ist.getUTCMinutes()).padStart(2,'0');
+    return { time:`${hh}:${mm}`, open:row[1], high:row[2], low:row[3], close:row[4] };
+  }).sort((a,b) => a.time.localeCompare(b.time));
+}
+
+// ── Get yesterday's IST date string ─────────────
+function btYesterday() {
+  const now = new Date(Date.now() + 5.5*3600000);
+  now.setUTCDate(now.getUTCDate()-1);
+  // Skip weekend — go to Friday if Saturday/Sunday
+  while (now.getUTCDay()===0 || now.getUTCDay()===6) now.setUTCDate(now.getUTCDate()-1);
+  return now.toISOString().slice(0,10);
+}
+
+// ── Run for a specific date ───────────────────────
+async function btRunDate(when) {
+  if (_btRunning) return;
+  if (!ST.accessToken||!ST.workerUrl) { alert('Connect to Upstox first'); return; }
+
+  const dateStr = when==='yesterday' ? btYesterday() : getISTDate();
+  _btRunning = true;
+
+  const runBtn  = q('bt-run-btn');
+  const ydayBtn = q('bt-yday-btn');
+  if (runBtn)  runBtn.disabled  = true;
+  if (ydayBtn) ydayBtn.disabled = true;
+  if (ydayBtn && when==='yesterday') ydayBtn.textContent = '⏳';
+
+  q('bt-subtitle').textContent = `Fetching candles for ${dateStr}…`;
+
+  try {
+    let candles;
+    if (when==='yesterday') {
+      candles = await btFetchCandlesForDate(dateStr);
+    } else {
+      candles = await btFetchCandles();  // intraday endpoint for today
+    }
+
+    if (!candles.length) throw new Error(`No candle data for ${dateStr}`);
+    _btCandles    = candles;
+    _btCandleDate = dateStr;
+
+    q('bt-subtitle').textContent = `Simulating ${a1Slots.filter(s=>s.enabled).length} slots on ${dateStr}…`;
+
+    const results = [];
+    let totalPnl=0, fired=0, wins=0;
+    for (const slot of a1Slots) {
+      if (!slot.enabled) continue;
+      const r = btSimSlot(slot, _btCandles);
+      results.push(r);
+      if (r.fired) { fired++; totalPnl+=r.pnl_pts; if (r.result==='TP') wins++; }
+    }
+
+    btLogs[dateStr] = {
+      date:dateStr, candles:_btCandles.length, slots:results,
+      summary:{ totalPnl:parseFloat(totalPnl.toFixed(2)), fired, wins,
+                wr: fired>0 ? Math.round(wins/fired*100) : 0 }
+    };
+    btSave();
+    btRenderToday(dateStr);
+    btRenderHistory();
+    q('bt-subtitle').textContent = `${dateStr} · ${candles.length} candles · done`;
+
+  } catch(e) {
+    q('bt-slot-list').innerHTML = `<div style="color:var(--red);padding:20px;font-size:12px">❌ ${e.message}</div>`;
+    q('bt-subtitle').textContent = `Failed for ${dateStr}`;
+  } finally {
+    _btRunning = false;
+    if (runBtn)  { runBtn.textContent='▶ Today';    runBtn.disabled=false; }
+    if (ydayBtn) { ydayBtn.textContent='◀ Yesterday'; ydayBtn.disabled=false; }
+  }
+}
   const url = ST.workerUrl.replace(/\/$/,'')
     + '/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute';
   const r = await fetch(url, {
