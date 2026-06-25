@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.2 · 25-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.3 · 25-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -4013,6 +4013,39 @@ async function btFetchCandles() {
     };
   }).sort((a,b) => a.time.localeCompare(b.time));
 }
+// ── Sync BT logs from VM ─────────────────────────────────
+async function btSyncFromVM() {
+  if (!ST.workerUrl) return;
+  try {
+    const r = await fetch(engineUrl() + '/engine/bt/logs');
+    const d = await r.json();
+    if (!d.ok || !d.logs) return;
+    let merged = 0;
+    for (const [date, entry] of Object.entries(d.logs)) {
+      if (!btLogs[date]) { btLogs[date] = entry; merged++; }
+    }
+    if (merged > 0) {
+      btSave();
+      lg(`BT: synced ${merged} day(s) from VM`, 'i');
+      const dates = Object.keys(btLogs).sort().reverse();
+      if (q('t-bt')?.classList.contains('on') && dates.length) {
+        btRenderToday(dates[0]); btRenderHistory();
+      }
+    }
+  } catch(_) {}
+}
+
+// ── Push result to VM after each run ─────────────────────
+async function btPushToVM(result) {
+  if (!ST.workerUrl) return;
+  try {
+    fetch(engineUrl() + '/engine/bt/logs', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(result)
+    });
+  } catch(_) {}
+}
+
 function btYesterday() {
   const now = new Date(Date.now() + 5.5*3600000);
   now.setUTCDate(now.getUTCDate()-1);
@@ -4066,6 +4099,7 @@ async function btRunDate(when) {
                 wr: fired>0 ? Math.round(wins/fired*100) : 0 }
     };
     btSave();
+    btPushToVM(btLogs[dateStr]);   // persist to VM for 90-day storage
     btRenderToday(dateStr);
     btRenderHistory();
     q('bt-subtitle').textContent = `${dateStr} · ${candles.length} candles · done`;
@@ -4233,6 +4267,7 @@ async function btRun() {
       summary: { totalPnl, fired, wins, wr: fired>0 ? Math.round(wins/fired*100) : 0 }
     };
     btSave();
+    btPushToVM(btLogs[date]);   // persist to VM
 
     btRenderToday(date);
     btRenderHistory();
@@ -4457,14 +4492,15 @@ let _btLastDate    = null;
 function initBtModule() {
   btLoad();
   _btLastDate = getISTDate();
-  // Show most recent day if available
   const dates = Object.keys(btLogs).sort().reverse();
   if (dates.length) {
     btRenderToday(dates[0]);
     btRenderHistory();
-    q('bt-subtitle').textContent = `Last run: ${dates[0]} · Live updates every 60s`;
+    q('bt-subtitle').textContent = `Last: ${dates[0]} · Live updates every 60s`;
   }
   btScheduleAutoRun();
+  // Sync any days computed by VM while app was closed
+  setTimeout(btSyncFromVM, 3000);
 }
 
 </script>
