@@ -806,7 +806,6 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
   </div>
 
-       └─────────────────────────────────────────────┘ -->
 
   <!-- ┌─────────────────────────────────────────────┐
        │  LOG TAB                                    │
@@ -857,6 +856,66 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
     Log
   </button>
+</div>
+
+<!-- ══ BACKTEST TAB ══════════════════════════════ -->
+<div class="tab" id="t-bt">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Daily Strategy Replay</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px" id="bt-subtitle">Simulates all SR slots on today's actual 1-min candles</div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onclick="btRun()" id="bt-run-btn"
+        style="background:var(--blue);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        ▶ Run
+      </button>
+      <button onclick="btExport()"
+        style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.25);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        ↓ Export
+      </button>
+    </div>
+  </div>
+
+  <!-- Info banner -->
+  <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:var(--r);padding:9px 12px;font-size:11px;color:var(--dim);line-height:1.5;margin-bottom:10px">
+    <b style="color:var(--amber)">How it works:</b> After each slot's exit time passes, candles are fetched automatically and that slot is simulated on actual OHLC data — giving you a live theoretical P&L as the day progresses. Tap ▶ Run anytime to refresh all completed slots. Results stored for 90 days with CSV export.
+  </div>
+
+  <!-- Summary cards row -->
+  <div id="bt-summary" style="display:none;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--green)" id="bt-sum-pnl">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Theory P&L (pts)</div>
+      </div>
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--blue)" id="bt-sum-fired">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Slots Fired</div>
+      </div>
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--amber)" id="bt-sum-win">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Winners</div>
+      </div>
+      <div class="card" style="text-align:center;padding:10px 6px">
+        <div style="font-size:18px;font-weight:700;color:var(--purple)" id="bt-sum-wr">—</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px">Win Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slot results list -->
+  <div id="bt-slot-list">
+    <div style="text-align:center;padding:40px 20px;color:var(--dim);font-size:12px">
+      Tap ▶ Run to simulate today's SR slots on live candle data.
+    </div>
+  </div>
+
+  <!-- Historical log -->
+  <div id="bt-history" style="margin-top:16px"></div>
+
 </div>
 
 </div><!-- /#app -->
@@ -3961,66 +4020,6 @@ function a1ImportSlots(event) {
       </div>
     </div>
   </div>
-</div>
-
-<!-- ══ BACKTEST TAB ══════════════════════════════ -->
-<div class="tab" id="t-bt">
-
-  <!-- Header -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div>
-      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Daily Strategy Replay</div>
-      <div style="font-size:11px;color:var(--dim);margin-top:2px" id="bt-subtitle">Simulates all SR slots on today's actual 1-min candles</div>
-    </div>
-    <div style="display:flex;gap:6px">
-      <button onclick="btRun()" id="bt-run-btn"
-        style="background:var(--blue);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
-        ▶ Run
-      </button>
-      <button onclick="btExport()"
-        style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.25);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
-        ↓ Export
-      </button>
-    </div>
-  </div>
-
-  <!-- Info banner -->
-  <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:var(--r);padding:9px 12px;font-size:11px;color:var(--dim);line-height:1.5;margin-bottom:10px">
-    <b style="color:var(--amber)">How it works:</b> After each slot's exit time passes, candles are fetched automatically and that slot is simulated on actual OHLC data — giving you a live theoretical P&L as the day progresses. Tap ▶ Run anytime to refresh all completed slots. Results stored for 90 days with CSV export.
-  </div>
-
-  <!-- Summary cards row -->
-  <div id="bt-summary" style="display:none;margin-bottom:12px">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">
-      <div class="card" style="text-align:center;padding:10px 6px">
-        <div style="font-size:18px;font-weight:700;color:var(--green)" id="bt-sum-pnl">—</div>
-        <div style="font-size:9px;color:var(--dim);margin-top:2px">Theory P&L (pts)</div>
-      </div>
-      <div class="card" style="text-align:center;padding:10px 6px">
-        <div style="font-size:18px;font-weight:700;color:var(--blue)" id="bt-sum-fired">—</div>
-        <div style="font-size:9px;color:var(--dim);margin-top:2px">Slots Fired</div>
-      </div>
-      <div class="card" style="text-align:center;padding:10px 6px">
-        <div style="font-size:18px;font-weight:700;color:var(--amber)" id="bt-sum-win">—</div>
-        <div style="font-size:9px;color:var(--dim);margin-top:2px">Winners</div>
-      </div>
-      <div class="card" style="text-align:center;padding:10px 6px">
-        <div style="font-size:18px;font-weight:700;color:var(--purple)" id="bt-sum-wr">—</div>
-        <div style="font-size:9px;color:var(--dim);margin-top:2px">Win Rate</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Slot results list -->
-  <div id="bt-slot-list">
-    <div style="text-align:center;padding:40px 20px;color:var(--dim);font-size:12px">
-      Tap ▶ Run to simulate today's SR slots on live candle data.
-    </div>
-  </div>
-
-  <!-- Historical log -->
-  <div id="bt-history" style="margin-top:16px"></div>
-
 </div>
 
 // ══════════════════════════════════════════════════════════
