@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.1 · 25-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.2 · 25-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -4452,7 +4452,6 @@ function btScheduleAutoRun() {
 }
 
 let _btLastDate    = null;
-let _btCandleDate  = null;   // date string for which _btCandles were fetched
 
 // ── Init ──────────────────────────────────────────
 function initBtModule() {
