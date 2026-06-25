@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.3 · 25-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.4 · 25-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -2362,11 +2362,15 @@ function updateMonitorFromVm(d) {
 function renderVmSlotStatus(vmSlots, engStatus) {
   const el = q('auto-vm-cards');
   if (!vmSlots?.length) { el.innerHTML = ''; return; }
+  // Only show slots that belong to the Auto tab (not SR slots from Auto1)
+  const autoIds = new Set(autoSlots.map(s => s.id));
+  const filtered = vmSlots.filter(s => autoIds.has(s.id));
+  if (!filtered.length) { el.innerHTML = ''; return; }
   const slbl = { idle:'IDLE', waiting:'WAITING', checking:'CHECKING CONDITIONS', placing:'PLACING…', placed:'✅ PLACED', skipped:'🚫 SKIPPED', error:'❌ ERROR', passed:'PASSED' };
   const scls = { idle:'vb-idle', waiting:'vb-wait', checking:'vb-wait', placing:'vb-wait', placed:'vb-ok', skipped:'vb-skip', error:'vb-skip', passed:'vb-idle' };
   el.innerHTML = `
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:6px">VM Slot Status</div>
-    ${vmSlots.map(s => `
+    ${filtered.map(s => `
       <div class="vm-card">
         <div class="vm-hdr">
           <span style="font-size:12px;font-weight:600">${s.name}</span>
