@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.5 · 26-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.6 · 26-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -674,7 +674,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <!-- Header row -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div>
-        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">SR Strategy Suite</div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">SR Strategies</span><span id="a1-slot-count" style="font-size:10px;background:rgba(30,144,255,.15);color:var(--blue);padding:1px 6px;border-radius:10px;font-weight:600">22</span></div>
         <div style="font-size:11px;color:var(--dim);margin-top:2px" id="a1-vm-status">Research-backed slots · tap to edit · push to activate</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -689,13 +689,15 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
     <!-- Tuesday ATM banner -->
     <div style="background:rgba(124,92,255,.07);border:1px solid rgba(124,92,255,.2);border-radius:var(--r);padding:9px 12px;font-size:11px;color:var(--dim);line-height:1.5;margin-bottom:10px">
-      <b style="color:var(--purple)">Tuesday rule:</b> ATM (0 OTM) auto-applied on Tuesdays at push time — expiry day compression makes ATM more efficient.
+      <b style="color:var(--purple)">Tue:</b> ATM override auto-applied at push time.
     </div>
 
     <!-- ── GLOBAL PARAMETERS ────────────────────── -->
-    <div class="card" style="margin-bottom:12px">
-      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:10px">
-        Global Parameters — Apply to All SR Slots
+    <details id="a1-global-details" style="margin-bottom:8px">
+    <summary style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);padding:8px 10px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">Global Parameters <span style="color:var(--blue)">▾ tap to expand</span></summary>
+    <div class="card" style="border-top:none;border-radius:0 0 var(--r) var(--r);margin-top:-1px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:6px">
+        Global Parameters
       </div>
 
       <!-- Lot sizing mode toggle -->
@@ -777,6 +779,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         ↺ Apply to All SR Slots
       </button>
     </div>
+    </details>
 
     <!-- SR Slot cards -->
     <div id="a1-slot-list"></div>
@@ -894,37 +897,37 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
 <!-- ══ BOTTOM NAV ════════════════════════════════════ -->
 <div id="nav">
-  <button class="nb on" id="nav-setup"    onclick="go('setup')">
+<button class="nb on" id="nav-setup"    onclick="go('setup')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
     Setup
   </button>
-  <button class="nb" id="nav-strategy" onclick="go('strategy')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-    Strategy
+<button class="nb" id="nav-auto1" onclick="go('auto1')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
+    SR
   </button>
-  <button class="nb" id="nav-monitor"  onclick="go('monitor')">
+<button class="nb" id="nav-monitor"  onclick="go('monitor')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     Monitor
   </button>
-  <button class="nb" id="nav-auto" onclick="go('auto')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-    Auto
-  </button>
-  <button class="nb" id="nav-auto1" onclick="go('auto1')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
-    Auto1
-  </button>
-  <button class="nb" id="nav-tradelog" onclick="go('tradelog')">
+<button class="nb" id="nav-tradelog" onclick="go('tradelog')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
     Trades
   </button>
-  <button class="nb" id="nav-bt" onclick="go('bt')">
+<button class="nb" id="nav-bt" onclick="go('bt')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-    BT
+    Replay
   </button>
-  <button class="nb" id="nav-log" onclick="go('log')">
+<button class="nb" id="nav-strategy" onclick="go('strategy')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    Strategy
+  </button>
+<button class="nb" id="nav-log" onclick="go('log')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Log
+    Events
+  </button>
+<button class="nb" id="nav-auto" onclick="go('auto')" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    Auto
   </button>
 </div>
 
@@ -3786,6 +3789,8 @@ function a1PatchSaveSlot() {
 function a1Render() {
   const el = q('a1-slot-list');
   if (!el) return;
+  const countEl = q('a1-slot-count');
+  if (countEl) countEl.textContent = `${a1Slots.filter(s=>s.enabled).length}/${a1Slots.length} slots`;
   const isTue = a1IsTuesday();
   if (!a1Slots.length) {
     el.innerHTML = '<div style="text-align:center;padding:28px;color:var(--dim);font-size:12px">No SR slots yet.<br>Tap + New to create one.</div>';
@@ -3824,16 +3829,12 @@ function a1Render() {
         <span class="atag">TGT <span>${s.tgt}</span></span>
         <span class="atag">${sizeLabel}</span>
       </div>
-      ${sets.map((cs,i) => `
-        <div class="aset-row">
-          <span style="font-size:10px;color:var(--dim)">${i+1}.</span>
-          <span class="adp ${cs.direction==='CE'?'adp-ce':'adp-pe'}">BUY ${cs.direction}</span>
-          <span style="font-size:10px;color:var(--dim)">${cs.name||''}</span>
-          <span style="font-size:10px;color:var(--dim);margin-left:auto">${cs.conditions.length} cond</span>
-        </div>`).join('')}
+      <div style="font-size:10px;color:var(--dim);padding:2px 0 4px;display:flex;gap:6px;flex-wrap:wrap">
+        ${sets.map((cs,i)=>`<span style="background:${cs.direction==='CE'?'rgba(0,212,120,.12)':'rgba(255,45,85,.12)'};color:${cs.direction==='CE'?'var(--green)':'var(--red)'};padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600">${cs.direction} ${cs.name?cs.name.split(':')[0].slice(0,18):''}</span>`).join('')}
+      </div>
       <div class="acard-actions">
-        <button class="aact-btn aact-dup" onclick="event.stopPropagation();a1DupSlot('${s.id}')">⧉ Duplicate</button>
-        <button class="aact-btn aact-del" onclick="event.stopPropagation();a1DelSlot('${s.id}')">✕ Delete</button>
+        <button class="aact-btn aact-dup" onclick="event.stopPropagation();a1DupSlot('${s.id}')">⧉ Dup</button>
+        <button class="aact-btn aact-del" onclick="event.stopPropagation();a1DelSlot('${s.id}')">✕</button>
       </div>
     </div>`;
   }).join('');
