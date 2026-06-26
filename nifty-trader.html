@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.4 · 25-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.5 · 26-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -3473,6 +3473,85 @@ function a1BuildSlots() {
       conditionSets:[mkSet('EOD overbought drift','PE','ALL',[
         mkIndCond('15:22','close','>','sma120'),
         mkIndCond('15:18','close','>','sma120'),
+      ])],
+    },
+
+    // ── REV1-1002-CE-SR ── Bounce after 15m selloff
+    // Analysis:10:00  Entry:10:02  Exit:10:32
+    // 15-min drop >30pts → BUY CE (mean reversion bounce)
+    // Backtest: WR 52%/55%, +116 opt pts, 18/25 months
+    {
+      id:'sr_rev1', enabled:true, _srFixed:true,
+      name:'REV1-1002-CE-SR', entryTime:et('10:02'), exitTime:'10:32:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('15m selloff bounce','CE','ALL',[
+        mkCandCond('10:00','close','<','09:45','close', -30),  // drop >30pts in 15m
+      ])],
+    },
+
+    // ── REV2-1046-PE-SR ── Fade 29m morning surge
+    // Analysis:10:44  Entry:10:46  Exit:11:16
+    // 29-min surge >50pts → BUY PE (fade extended morning rally)
+    // Backtest: WR 57%/71%, +129 opt pts, 13/20 months
+    {
+      id:'sr_rev2', enabled:true, _srFixed:true,
+      name:'REV2-1046-PE-SR', entryTime:et('10:46'), exitTime:'11:16:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('29m morning surge fade','PE','ALL',[
+        mkCandCond('10:44','close','>','10:15','close', 50),  // surge >50pts in 29m
+      ])],
+    },
+
+    // ── REV5-1102-CE-SR ── Bounce after 29m midmorning drop
+    // Analysis:11:00  Entry:11:02  Exit:11:32
+    // 29-min drop >50pts → BUY CE (oversold bounce)
+    // Backtest: WR 57%/69%, +93 opt pts, 17/21 months
+    // Note: fires when market dropped — opposite condition to 1102-PE-SR
+    {
+      id:'sr_rev5', enabled:true, _srFixed:true,
+      name:'REV5-1102-CE-SR', entryTime:et('11:02'), exitTime:'11:32:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('29m midmorning drop bounce','CE','ALL',[
+        mkCandCond('11:00','close','<','10:31','close', -50),  // drop >50pts in 29m
+      ])],
+    },
+
+    // ── REV6-1302-PE-SR ── Fade 29m midday surge
+    // Analysis:13:00  Entry:13:02  Exit:13:32
+    // 29-min surge >50pts → BUY PE (fade midday momentum)
+    // Backtest: WR 62%/52%, +60 opt pts, 11/20 months
+    {
+      id:'sr_rev6', enabled:true, _srFixed:true,
+      name:'REV6-1302-PE-SR', entryTime:et('13:02'), exitTime:'13:32:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('29m midday surge fade','PE','ALL',[
+        mkCandCond('13:00','close','>','12:31','close', 50),  // surge >50pts in 29m
+      ])],
+    },
+
+    // ── REV3-1402-PE-SR ── Fade 29m afternoon surge  ⭐ BEST
+    // Analysis:14:00  Entry:14:02  Exit:14:22
+    // 29-min surge >50pts → BUY PE (afternoon reversal)
+    // Backtest: WR 61%/78%, +120 opt pts, 16/18 months — strongest reversal slot
+    {
+      id:'sr_rev3', enabled:true, _srFixed:true,
+      name:'REV3-1402-PE-SR', entryTime:et('14:02'), exitTime:'14:22:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('29m afternoon surge fade','PE','ALL',[
+        mkCandCond('14:00','close','>','13:31','close', 50),  // surge >50pts in 29m
+      ])],
+    },
+
+    // ── REV4-1430-CE-SR ── Bounce after 29m afternoon drop
+    // Analysis:14:28  Entry:14:30  Exit:14:50
+    // 29-min drop >50pts → BUY CE (afternoon capitulation bounce)
+    // Backtest: WR 59%/62%, +86 opt pts, 15/20 months
+    {
+      id:'sr_rev4', enabled:true, _srFixed:true,
+      name:'REV4-1430-CE-SR', entryTime:et('14:30'), exitTime:'14:50:30',
+      otm:1, step:50, sl:5, tgt:7, lots:1, lotSize:65, ...base,
+      conditionSets:[mkSet('29m afternoon drop bounce','CE','ALL',[
+        mkCandCond('14:28','close','<','13:59','close', -50),  // drop >50pts in 29m
       ])],
     },
 
