@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.7 · 26-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.8 · 29-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -4472,8 +4472,9 @@ function btToggleDay(date) {
 // ── Download raw candles CSV from VM ─────────────────────
 async function btDownloadCandles(dateStr) {
   if (!ST.workerUrl) { alert('Not connected to VM'); return; }
-  const date = dateStr || btYesterday();
-  const url  = engineUrl() + `/engine/candles?date=${date}`;
+  // Only today's intraday data is available from Upstox without paid subscription
+  const date = getISTDate();
+  const url  = engineUrl() + '/engine/candles';  // no date = intraday today
   try {
     const r = await fetch(url);
     if (!r.ok) { const d=await r.json(); throw new Error(d.error||'Failed'); }
@@ -4481,7 +4482,7 @@ async function btDownloadCandles(dateStr) {
     const blob = new Blob([csv], {type:'text/csv'});
     const a    = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `nifty_${date}.csv`;
+    a.download = `nifty_${date}.csv`;  // date is today
     a.click(); URL.revokeObjectURL(a.href);
     lg(`Downloaded candles for ${date}`, 'i');
   } catch(e) {
