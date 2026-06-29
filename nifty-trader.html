@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.8 · 29-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.9 · 29-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -3106,6 +3106,7 @@ function checkAndCaptureLogs(vmSlots, logEntries, engineStatus) {
 function renderTradeLogs() {
   const el = q('tl-list');
   if (!el) return;
+  const today = getISTDate();
   const dates = Object.keys(tradeLogs).sort().reverse();
   if (!dates.length) {
     el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--dim);font-size:12px">No trade logs yet.<br>Logs captured automatically when slots execute.</div>';
@@ -3121,15 +3122,15 @@ function renderTradeLogs() {
     return `
       <div class="tl-day">
         <div class="tl-day-hdr" onclick="tlToggleDay('${date}')">
-          <span class="tl-day-lbl">📅 ${date}</span>
+          <span class="tl-day-lbl">${date===today?'📅 TODAY — '+date:'📅 '+date}</span>
           <span class="tl-day-meta">
             ${nPlaced  ? `<span style="color:var(--green)">${nPlaced} placed</span>` : ''}
             ${nSkipped ? `<span style="color:var(--red)">${nSkipped} skip</span>` : ''}
             ${nPassed  ? `<span style="color:var(--dim)">${nPassed} missed</span>` : ''}
           </span>
-          <span class="tl-chevron" id="tlc-d-${date}">▶</span>
+          <span class="tl-chevron" id="tlc-d-${date}">${date===today?'▼':'▶'}</span>
         </div>
-        <div class="tl-day-body" id="tlb-d-${date}" style="display:none">
+        <div class="tl-day-body" id="tlb-d-${date}" style="display:${date===today?'block':'none'}">
           ${names.map(name => {
             const slot = slots[name];
             const sCol  = slot.status==='placed'?'var(--green)':slot.status==='skipped'?'var(--red)':slot.status==='error'?'var(--red)':'var(--dim)';

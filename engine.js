@@ -659,9 +659,22 @@ async function fetchCandleMap() {
   const d = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute');
   const map = {};
   for (const row of (d?.data?.candles || [])) {
-    // Timestamp is IST: 2024-01-18T09:15:00+05:30 — extract HH:MM directly
-    const match = String(row[0]).match(/T(\d{2}):(\d{2}):/);
-    if (match) map[`${match[1]}:${match[2]}`] = { o: row[1], h: row[2], l: row[3], cl: row[4] };
+    // Convert timestamp to IST HH:MM
+    // Upstox may return IST (+05:30) or UTC (+00:00) — handle both
+    const ts  = String(row[0]);
+    let hh, mm;
+    // Try IST format: ...T09:15:00+05:30
+    const istMatch = ts.match(/T(\d{2}):(\d{2}):\d{2}\+05:30/);
+    if (istMatch) {
+      hh = istMatch[1]; mm = istMatch[2];
+    } else {
+      // UTC format: convert to IST by adding 5h30m
+      const dt  = new Date(ts);
+      const ist = new Date(dt.getTime() + 5.5 * 3600000);
+      hh = String(ist.getUTCHours()).padStart(2, '0');
+      mm = String(ist.getUTCMinutes()).padStart(2, '0');
+    }
+    map[`${hh}:${mm}`] = { o: row[1], h: row[2], l: row[3], cl: row[4] };
   }
   return map;
 }
