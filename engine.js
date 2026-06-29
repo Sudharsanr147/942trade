@@ -971,24 +971,33 @@ const server = http.createServer(async (req, res) => {
     if (!ST.token) return ok({ error: 'No token' }, 400);
     const params = new URL('http://x' + req.url).searchParams;
     const dateStr = params.get('date');
+    const key = 'NSE_INDEX%7CNifty%2050';
     let upstoxPath;
     if (dateStr) {
+      // Historical: to_date must be day AFTER the target date
       const d = new Date(dateStr + 'T00:00:00Z');
       d.setUTCDate(d.getUTCDate() + 1);
       const to = d.toISOString().slice(0, 10);
-      upstoxPath = `/v2/historical-candle/NSE_INDEX%7CNifty%2050/1minute/${to}/${dateStr}`;
+      upstoxPath = `/v2/historical-candle/${key}/1minute/${to}/${dateStr}`;
+      lg(`Candle download: historical ${dateStr} (to=${to})`, 'i');
     } else {
-      upstoxPath = '/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute';
+      upstoxPath = `/v2/historical-candle/intraday/${key}/1minute`;
+      lg(`Candle download: intraday`, 'i');
     }
     upstox(upstoxPath).then(data => {
-      const candles = data?.data?.candles || [];
+      const candles = (data?.data?.candles || []).slice().reverse(); // oldest first
+      if (!candles.length) {
+        lg(`Candle download: no data returned for ${dateStr||'today'}`, 'w');
+        res.writeHead(200, { 'Content-Type':'text/csv', 'Access-Control-Allow-Origin':'*' });
+        return res.end('timestamp,open,high,low,close,volume\n');
+      }
       const rows = ['timestamp,open,high,low,close,volume'];
       candles.forEach(c => {
         const ist = new Date(new Date(c[0]).getTime() + 5.5 * 3600000);
         const ts  = ist.toISOString().replace('T', ' ').slice(0, 16);
         rows.push(`${ts},${c[1]},${c[2]},${c[3]},${c[4]},${c[5] || 0}`);
       });
-      const csv = rows.join('\n');
+      const csv   = rows.join('\n');
       const label = dateStr || new Date(Date.now() + 5.5*3600000).toISOString().slice(0,10);
       res.writeHead(200, {
         'Content-Type': 'text/csv',
@@ -996,8 +1005,11 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
       });
       res.end(csv);
-      lg(`Candle export: ${candles.length} candles for ${label}`, 'i');
-    }).catch(e => ok({ error: e.message }, 500));
+      lg(`Candle export: ${candles.length} candles for ${label}`, 's');
+    }).catch(e => {
+      lg(`Candle export error: ${e.message}`, 'e');
+      ok({ error: e.message }, 500);
+    });
     return;
   }
 
