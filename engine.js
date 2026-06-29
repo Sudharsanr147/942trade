@@ -594,26 +594,31 @@ function evalOp(l, op, r) {
 }
 
 // Indicator value (120-period SMA / EMA on close), computed from intraday candles
-// up to and including refTime. Engine candles are intraday-only, so a full 120-bar
-// window exists only from ~11:15 onward; EARLIER slots compute over whatever closes
-// are available since 09:15 (a shorter effective average). Returns null only if there
-// is essentially no data (fewer than 2 closes).
+// Compute SMA/EMA for any period from candle map up to refTime.
+// Returns null only if fewer than 2 candles available.
 function indicatorValue(candleMap, refTime, name) {
   const closes = Object.keys(candleMap)
     .filter(t => t <= refTime)
     .sort()
     .map(t => candleMap[t].cl);
   if (closes.length < 2) return null;
-  const period = 120;
-  const win = closes.slice(-period);
-  if (name === 'sma120') return win.reduce((a, b) => a + b, 0) / win.length;
-  if (name === 'ema120') {
+
+  // Parse indicator name: sma20, sma50, sma120, ema20, ema50, ema120
+  const m = name.match(/^(sma|ema)(\d+)$/);
+  if (!m) return null;
+
+  const type   = m[1];           // 'sma' or 'ema'
+  const period = parseInt(m[2]); // 20, 50, 120 etc.
+  const win    = closes.slice(-period);
+
+  if (type === 'sma') {
+    return win.reduce((a, b) => a + b, 0) / win.length;
+  } else {
     const k = 2 / (period + 1);
     let ema = win[0];
     for (let i = 1; i < win.length; i++) ema = win[i] * k + ema * (1 - k);
     return ema;
   }
-  return null;
 }
 
 function evalCondition(cond, candleMap) {
