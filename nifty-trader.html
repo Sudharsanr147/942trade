@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.6 · 26-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.7 · 26-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -839,6 +839,10 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       <div style="font-size:11px;color:var(--dim);margin-top:2px" id="bt-subtitle">Simulates SR slots on actual 1-min candles</div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="btDownloadCandles()"
+        style="background:rgba(0,212,120,.1);border:1px solid rgba(0,212,120,.25);color:var(--green);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+        ↓ CSV
+      </button>
       <button onclick="btRunDate('yesterday')" id="bt-yday-btn"
         style="background:rgba(30,144,255,.12);border:1px solid rgba(30,144,255,.3);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
         ◀ Yesterday
@@ -849,7 +853,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       </button>
       <button onclick="btExport()"
         style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.25);color:var(--blue);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
-        ↓ CSV
+        ↓ Results
       </button>
     </div>
   </div>
@@ -4463,6 +4467,26 @@ function btRenderHistory() {
 function btToggleDay(date) {
   const el = q(`bt-day-${date}`);
   if (el) el.style.display = el.style.display==='none'?'block':'none';
+}
+
+// ── Download raw candles CSV from VM ─────────────────────
+async function btDownloadCandles(dateStr) {
+  if (!ST.workerUrl) { alert('Not connected to VM'); return; }
+  const date = dateStr || btYesterday();
+  const url  = engineUrl() + `/engine/candles?date=${date}`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) { const d=await r.json(); throw new Error(d.error||'Failed'); }
+    const csv  = await r.text();
+    const blob = new Blob([csv], {type:'text/csv'});
+    const a    = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `nifty_${date}.csv`;
+    a.click(); URL.revokeObjectURL(a.href);
+    lg(`Downloaded candles for ${date}`, 'i');
+  } catch(e) {
+    alert(`Download failed: ${e.message}`);
+  }
 }
 
 // ── Export all logs as CSV ────────────────────────
