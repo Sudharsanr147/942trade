@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v3.9 · 29-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.0 · 29-Jun-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -3043,7 +3043,7 @@ function captureSlotLog(slot, status, allLogs) {
     entryTime: slot.entryTime,
     exitTime:  slot.exitTime,
     sets:      slot.sets || 0,
-    savedAt:   new Date(Date.now()+5.5*3600000).toUTCString().slice(17,25),
+    savedAt:   new Date(Date.now()+5.5*3600000).toISOString().slice(11,19),
     logs,
   };
   saveTradeLogs();
@@ -3075,6 +3075,19 @@ function appendExitToLog(allLogs) {
 function checkAndCaptureLogs(vmSlots, logEntries, engineStatus) {
   const prevEng = prevSlotStatus['__engine__'];
   const today   = getISTDate();
+
+  // Clear any today entries that were saved before 09:15 (stale from yesterday's late run)
+  if (tradeLogs[today]) {
+    let staleCleared = false;
+    for (const [name, entry] of Object.entries(tradeLogs[today])) {
+      const savedTime = entry.savedAt || '00:00:00';
+      if (savedTime < '09:15:00') {
+        delete tradeLogs[today][name];
+        staleCleared = true;
+      }
+    }
+    if (staleCleared) { saveTradeLogs(); }
+  }
 
   for (const slot of (vmSlots||[])) {
     const prev = prevSlotStatus[slot.id];
@@ -3145,7 +3158,7 @@ function renderTradeLogs() {
                   <span class="tl-chevron" id="tlc-s-${sid}">▶</span>
                 </div>
                 <div class="tl-slot-body" id="tlb-s-${sid}" style="display:none">
-                  <div style="padding:6px 0 4px;font-size:10px;color:var(--dim)">Saved at ${slot.savedAt||'?'} IST · ${(slot.logs||[]).length} entries</div>
+                  <div style="padding:6px 0 4px;font-size:10px;color:var(--dim)">Saved at ${slot.savedAt||'?'} · ${(slot.logs||[]).length} entries</div>
                   ${(slot.logs||[]).length
                     ? (slot.logs).map(e =>
                         `<div class="tl-log-row ${e.type||'i'}">
