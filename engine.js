@@ -1038,6 +1038,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const slots     = AUTO_SLOTS;  // already in memory — no need to call loadSlots()
       if (!slots || !slots.length) return ok({ ok:false, error:'No slots loaded on VM — push SR slots first' });
+      const candleMap = await fetchCandleMap();
       const times     = Object.keys(candleMap).sort();
       const now       = times[times.length-1] || '??:??';
 
