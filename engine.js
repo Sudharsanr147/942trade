@@ -1036,8 +1036,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/engine/test/all' && req.method === 'GET') {
     if (!ST.token) return ok({ error: 'No token — connect to Upstox first' }, 400);
     try {
-      const slots     = loadSlots();
-      const candleMap = await fetchCandleMap();
+      const slots     = AUTO_SLOTS;  // already in memory — no need to call loadSlots()
+      if (!slots || !slots.length) return ok({ ok:false, error:'No slots loaded on VM — push SR slots first' });
       const times     = Object.keys(candleMap).sort();
       const now       = times[times.length-1] || '??:??';
 
@@ -1115,8 +1115,9 @@ const server = http.createServer(async (req, res) => {
     const say = (msg, tag='i') => { log.push({ msg, tag, ts: istNow() }); lg(`[TEST] ${msg}`, tag); };
 
     try {
-      // 1. Load slots from file
-      const slots = loadSlots();
+      // 1. Load slots from memory
+      const slots = AUTO_SLOTS;
+      if (!slots || !slots.length) return ok({ ok:false, error:'No slots loaded on VM — push SR slots first', log:[] });
       const slot  = slots.find(s => s.name === slotName || s.id === slotName);
       if (!slot) {
         return ok({ ok:false, error:`Slot "${slotName}" not found in engine-slots.json`,
