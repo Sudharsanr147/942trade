@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.5 · 01-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.6 · 01-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -684,7 +684,6 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           ↑ Restore<input type="file" accept=".json" onchange="a1ImportSlots(event)" style="display:none">
         </label>
         <button onclick="a1PushToVM()" style="background:var(--purple);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">☁️ Push SR</button>
-        <button onclick="a1TestSlot()" style="background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);color:var(--amber);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Dry-run a slot on live candles">🔬 Test</button>
       </div>
     </div>
 
@@ -783,6 +782,11 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </details>
 
     <!-- SR Slot cards -->
+    <div style="margin-bottom:8px">
+      <button onclick="a1TestSlot()" style="width:100%;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);color:var(--amber);padding:8px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer">
+        🔬 Test All Slots on Live Candles
+      </button>
+    </div>
     <div id="a1-slot-list"></div>
 
     <!-- VM status cards -->
