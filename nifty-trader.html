@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.2 · 01-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.5 · 01-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -684,6 +684,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           ↑ Restore<input type="file" accept=".json" onchange="a1ImportSlots(event)" style="display:none">
         </label>
         <button onclick="a1PushToVM()" style="background:var(--purple);border:none;color:#fff;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">☁️ Push SR</button>
+        <button onclick="a1TestSlot()" style="background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);color:var(--amber);padding:7px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Dry-run a slot on live candles">🔬 Test</button>
       </div>
     </div>
 
@@ -786,6 +787,13 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
     <!-- VM status cards -->
     <div id="a1-vm-cards" style="margin-top:10px"></div>
+    <div id="a1-test-panel" style="display:none;margin-top:10px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r);padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--amber)">🔬 Slot Test Results</span>
+        <button onclick="q('a1-test-panel').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div id="a1-test-log" style="font-size:11px;line-height:1.7;font-family:monospace"></div>
+    </div>
 
   </div>
   <div class="tab" id="t-tradelog">
@@ -1120,6 +1128,8 @@ async function exchangeCode(code) {
     pushTokenToCloud(d.access_token);
     // Auto-push all enabled auto-strategy slots to VM
     pushSlotsToVM();
+    // Auto-push SR slots to VM (silent — no alert on success)
+    a1PushToVM(true);
   } catch(e) {
     authMsg('❌ ' + e.message);
     lg('Auth error: ' + e.message, 'e');
@@ -3887,11 +3897,11 @@ function a1Toggle(id, en) {
 }
 
 // ── Push to VM ────────────────────────────────────
-async function a1PushToVM() {
-  if (!ST.accessToken) { alert('Connect to Upstox first'); return; }
-  if (!ST.workerUrl)   { alert('Set Oracle VM URL in Setup tab'); return; }
+async function a1PushToVM(silent = false) {
+  if (!ST.accessToken) { if (!silent) alert('Connect to Upstox first'); return; }
+  if (!ST.workerUrl)   { if (!silent) alert('Set Oracle VM URL in Setup tab'); return; }
   const enabled = a1Slots.filter(s => s.enabled);
-  if (!enabled.length) { alert('No enabled SR slots to push'); return; }
+  if (!enabled.length) { if (!silent) alert('No enabled SR slots to push'); return; }
   const isTue   = a1IsTuesday();
   const toSend  = enabled.map(s => ({...s, otm: a1GetOtm(s)}));
   try {
@@ -3912,7 +3922,7 @@ async function a1PushToVM() {
     a1StartPoll();
   } catch(e) {
     lg(`❌ SR push failed: ${e.message}`, 'e');
-    alert(`SR push failed: ${e.message}`);
+    if (!silent) alert(`SR push failed: ${e.message}`);
   }
 }
 
@@ -3963,6 +3973,53 @@ async function a1FetchVmStatus() {
 }
 
 // ── Init ──────────────────────────────────────────
+// ── Slot dry-run test ────────────────────────────────────
+async function a1TestSlot() {
+  if (!ST.workerUrl) { alert('Connect to Upstox first'); return; }
+  const panel = q('a1-test-panel');
+  const logEl = q('a1-test-log');
+  panel.style.display = 'block';
+  logEl.innerHTML = '<span style="color:var(--amber)">⏳ Fetching live candles and testing all slots…</span>';
+
+  try {
+    const r = await fetch(`${engineUrl()}/engine/test/all`);
+    const d = await r.json();
+    if (!d.ok) {
+      logEl.innerHTML = `<span style="color:var(--red)">❌ ${d.error}</span>`; return;
+    }
+    const fired   = d.results.filter(x => x.fired);
+    const nofired = d.results.filter(x => !x.fired);
+    let html = `<div style="margin-bottom:10px;padding:6px 8px;background:var(--s3);border-radius:5px;font-size:10px">
+      📡 ${d.candles} candles · latest: <b>${d.latestCandle}</b> ·
+      <span style="color:var(--green)">${fired.length} fire</span> /
+      <span style="color:var(--dim)">${nofired.length} no signal</span>
+    </div>`;
+    for (const slot of d.results) {
+      const bc = slot.fired ? 'var(--green)' : 'var(--bdr)';
+      const tc = slot.fired ? 'var(--green)' : 'var(--dim)';
+      const icon = slot.fired ? `✅ BUY ${slot.direction}` : '⛔ no signal';
+      html += `<div style="margin-bottom:6px;border:1px solid ${bc};border-radius:5px;padding:7px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <b style="font-size:11px;color:${tc}">${slot.name}</b>
+          <span style="font-size:10px;color:${tc}">${icon}</span>
+        </div>
+        <div style="font-size:9px;color:var(--dim);margin-bottom:3px">${slot.entry} → ${slot.exit}</div>`;
+      for (const set of slot.sets) {
+        const sc = set.pass ? 'var(--green)' : 'var(--dim)';
+        html += `<div style="font-size:10px;color:${sc}">${set.pass?'✅':'❌'} <b>${set.set}</b> → ${set.dir}</div>`;
+        for (const c of set.conds) {
+          const cc = c.pass ? 'var(--green)' : 'var(--red)';
+          html += `<div style="font-size:9px;color:${cc};padding-left:10px;font-family:monospace">${c.pass?'✓':'✗'} ${c.msg}</div>`;
+        }
+      }
+      html += '</div>';
+    }
+    logEl.innerHTML = html;
+  } catch(e) {
+    logEl.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+  }
+}
+
 function initAuto1Module() {
   a1Load();
   a1SyncGlobalPanel();

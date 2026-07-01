@@ -1031,6 +1031,186 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── GET /engine/test/all ────────────────────────────────
+  // Dry-run ALL slots on current live candles, return full detail
+  if (p === '/engine/test/all' && req.method === 'GET') {
+    if (!ST.token) return ok({ error: 'No token — connect to Upstox first' }, 400);
+    try {
+      const slots     = loadSlots();
+      const candleMap = await fetchCandleMap();
+      const times     = Object.keys(candleMap).sort();
+      const now       = times[times.length-1] || '??:??';
+
+      const results = [];
+      for (const slot of slots) {
+        if (!slot.enabled) continue;
+        const slotLog = [];
+        const say = (msg, tag='i') => slotLog.push({ msg, tag });
+
+        let firedSet = null;
+        for (const cs of (slot.conditionSets || [])) {
+          if (!cs.enabled) continue;
+          let setPass = true;
+          const condResults = [];
+          for (const cond of (cs.conditions || [])) {
+            if (!cond.enabled) continue;
+            const lc = candleMap[cond.leftTime];
+            if (!lc) {
+              condResults.push({ pass:false, msg:`No candle at ${cond.leftTime}` });
+              setPass = false; continue;
+            }
+            const lv = fieldOf(lc, cond.leftField);
+            let rv, rvDesc;
+            if (cond.rightType === 'indicator') {
+              const raw = indicatorValue(candleMap, cond.leftTime, cond.rightField);
+              if (raw === null) {
+                condResults.push({ pass:false, msg:`${cond.rightField} null at ${cond.leftTime}` });
+                setPass = false; continue;
+              }
+              rv = raw + parseFloat(cond.offsetPts || 0);
+              rvDesc = `${cond.rightField}=${raw.toFixed(2)}+${cond.offsetPts||0}=${rv.toFixed(2)}`;
+            } else if (cond.rightType === 'candle') {
+              const rc = candleMap[cond.rightTime];
+              if (!rc) {
+                condResults.push({ pass:false, msg:`No candle at ${cond.rightTime}` });
+                setPass = false; continue;
+              }
+              rv = fieldOf(rc, cond.rightField) + parseFloat(cond.offsetPts || 0);
+              rvDesc = `${cond.rightTime}.${cond.rightField}+${cond.offsetPts||0}=${rv.toFixed(2)}`;
+            } else {
+              rv = parseFloat(cond.rightValue || 0) + parseFloat(cond.offsetPts || 0);
+              rvDesc = `${rv}`;
+            }
+            const pass = evalOp(lv, cond.op, rv);
+            condResults.push({ pass, msg:`${cond.leftTime}.${cond.leftField}=${lv.toFixed(2)} ${cond.op} ${rvDesc}` });
+            if (!pass) setPass = false;
+          }
+          if (setPass && !firedSet) firedSet = cs;
+          slotLog.push({ set: cs.name, dir: cs.direction, pass: setPass, conds: condResults });
+        }
+        results.push({
+          name:     slot.name,
+          entry:    slot.entryTime,
+          exit:     slot.exitTime,
+          fired:    !!firedSet,
+          direction:firedSet?.direction || null,
+          sets:     slotLog,
+        });
+      }
+      return ok({ ok:true, candles:times.length, latestCandle:now, results });
+    } catch(e) {
+      return ok({ ok:false, error:e.message });
+    }
+  }
+
+  // ── GET /engine/test/slot?name=0946-CE-SR ──────────────
+  // Dry-run: fetches live candles, evaluates slot conditions,
+  // returns step-by-step logs without placing any order
+  if (p.startsWith('/engine/test/slot') && req.method === 'GET') {
+    const slotName = new URL('http://x' + req.url).searchParams.get('name');
+    if (!slotName) return ok({ error: 'Missing ?name= param' }, 400);
+    if (!ST.token)  return ok({ error: 'No token — connect to Upstox first' }, 400);
+
+    const log = [];
+    const say = (msg, tag='i') => { log.push({ msg, tag, ts: istNow() }); lg(`[TEST] ${msg}`, tag); };
+
+    try {
+      // 1. Load slots from file
+      const slots = loadSlots();
+      const slot  = slots.find(s => s.name === slotName || s.id === slotName);
+      if (!slot) {
+        return ok({ ok:false, error:`Slot "${slotName}" not found in engine-slots.json`,
+                    available: slots.map(s=>s.name) });
+      }
+      say(`Found slot: ${slot.name} | entry=${slot.entryTime} exit=${slot.exitTime}`);
+      say(`OTM=${slot.otm} step=${slot.step} SL=${slot.sl} TGT=${slot.tgt} enabled=${slot.enabled}`);
+
+      // 2. Fetch candles
+      say('Fetching intraday candles...');
+      const candleMap = await fetchCandleMap();
+      const times = Object.keys(candleMap).sort();
+      say(`Candles loaded: ${times.length} candles (${times[0]} → ${times[times.length-1]})`);
+
+      // 3. Evaluate each condition set
+      let firedSet = null;
+      for (const cs of (slot.conditionSets || [])) {
+        if (!cs.enabled) { say(`Set "${cs.name}": DISABLED — skip`); continue; }
+        say(`Evaluating set: "${cs.name}" (${cs.logic}/${cs.direction})`);
+
+        let setPass = true;
+        for (const cond of (cs.conditions || [])) {
+          if (!cond.enabled) { say(`  Cond: DISABLED — skip`); continue; }
+
+          const lc = candleMap[cond.leftTime];
+          if (!lc) {
+            say(`  Cond: ❌ No candle at leftTime=${cond.leftTime}`, 'e');
+            setPass = false; continue;
+          }
+          const lv = fieldOf(lc, cond.leftField);
+
+          let rv, rvDesc;
+          if (cond.rightType === 'indicator') {
+            const raw = indicatorValue(candleMap, cond.leftTime, cond.rightField);
+            if (raw === null) {
+              say(`  Cond: ❌ indicatorValue(${cond.rightField}) returned null at ${cond.leftTime}`, 'e');
+              setPass = false; continue;
+            }
+            rv = raw + parseFloat(cond.offsetPts || 0);
+            rvDesc = `${cond.rightField}=${raw.toFixed(2)} + offset=${cond.offsetPts||0} = ${rv.toFixed(2)}`;
+          } else if (cond.rightType === 'candle') {
+            const rc = candleMap[cond.rightTime];
+            if (!rc) {
+              say(`  Cond: ❌ No candle at rightTime=${cond.rightTime}`, 'e');
+              setPass = false; continue;
+            }
+            const base = fieldOf(rc, cond.rightField);
+            rv = base + parseFloat(cond.offsetPts || 0);
+            rvDesc = `${cond.rightTime}.${cond.rightField}=${base.toFixed(2)} + offset=${cond.offsetPts||0} = ${rv.toFixed(2)}`;
+          } else {
+            rv = parseFloat(cond.rightValue || 0) + parseFloat(cond.offsetPts || 0);
+            rvDesc = `value=${rv}`;
+          }
+
+          const result = evalOp(lv, cond.op, rv);
+          const sym = result ? '✅' : '❌';
+          say(`  Cond: ${sym} ${cond.leftTime}.${cond.leftField}=${lv.toFixed(2)} ${cond.op} ${rvDesc} → ${result?'PASS':'FAIL'}`);
+          if (!result) setPass = false;
+        }
+
+        say(`  Set result: ${setPass ? `✅ ALL PASS → BUY ${cs.direction}` : '❌ FAIL'}`);
+        if (setPass && !firedSet) firedSet = cs;
+      }
+
+      // 4. Summary
+      if (firedSet) {
+        say(`🔥 SIGNAL: BUY ${firedSet.direction} — would place order if this were live`, 's');
+        // 5. Instrument lookup (dry run — don't place order)
+        say('Checking instrument availability (dry run)...');
+        try {
+          const spot   = await getNiftySpot();
+          const atm    = Math.round(spot / slot.step) * slot.step;
+          const otm    = slot.otm || 1;
+          const strike = firedSet.direction === 'CE' ? atm + otm*slot.step : atm - otm*slot.step;
+          say(`Spot=${spot.toFixed(2)} ATM=${atm} Strike=${strike}${firedSet.direction} OTM=${otm}`);
+          const expiry = await getLiveExpiry();
+          say(`Expiry: ${expiry}`);
+          const { key, ltp } = await findInstrument(expiry, strike, firedSet.direction);
+          say(`✅ Instrument found: ${key} LTP=${ltp}`, 's');
+          say(`WOULD PLACE: BUY ${strike}${firedSet.direction} @ ~${ltp} | SL=${slot.sl}opt TGT=${slot.tgt}opt`, 's');
+        } catch(ie) {
+          say(`❌ Instrument lookup failed: ${ie.message}`, 'e');
+        }
+      } else {
+        say('⛔ NO SIGNAL — no condition set satisfied', 'w');
+      }
+
+      return ok({ ok: true, slot: slot.name, signal: firedSet?.direction || null, log });
+    } catch(e) {
+      say(`❌ Test failed: ${e.message}`, 'e');
+      return ok({ ok: false, error: e.message, log });
+    }
+  }
+
   ok({ error: 'Unknown endpoint' }, 404);
 });
 
