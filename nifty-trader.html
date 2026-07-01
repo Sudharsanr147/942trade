@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.0 · 29-Jun-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.2 · 01-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -799,9 +799,15 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.2);color:var(--blue);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
           ↓ Export
         </button>
+        <button onclick="clearTodayLogs()"
+          style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);color:var(--amber);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer"
+          title="Clear only today's entries">
+          Clear Today
+        </button>
         <button onclick="clearTradeLogs()"
-          style="background:none;border:1px solid var(--bdr);color:var(--dim);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
-          Clear
+          style="background:none;border:1px solid var(--bdr);color:var(--dim);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer"
+          title="Clear all trade logs">
+          Clear All
         </button>
       </div>
     </div>
@@ -3044,6 +3050,7 @@ function captureSlotLog(slot, status, allLogs) {
     exitTime:  slot.exitTime,
     sets:      slot.sets || 0,
     savedAt:   new Date(Date.now()+5.5*3600000).toISOString().slice(11,19),
+    savedDate: getISTDate(),
     logs,
   };
   saveTradeLogs();
@@ -3076,12 +3083,18 @@ function checkAndCaptureLogs(vmSlots, logEntries, engineStatus) {
   const prevEng = prevSlotStatus['__engine__'];
   const today   = getISTDate();
 
-  // Clear any today entries that were saved before 09:15 (stale from yesterday's late run)
+  // Clear yesterday's entries that leaked into today's date key
+  // This happens when engine saves a slot status just after midnight IST
+  // Fix: compare the savedDate field, not just savedAt time
   if (tradeLogs[today]) {
     let staleCleared = false;
     for (const [name, entry] of Object.entries(tradeLogs[today])) {
-      const savedTime = entry.savedAt || '00:00:00';
-      if (savedTime < '09:15:00') {
+      // If savedDate is set and doesn't match today → stale entry
+      const savedDate = entry.savedDate || '';
+      const savedTime = entry.savedAt   || '00:00:00';
+      const isStale   = (savedDate && savedDate !== today) ||
+                        (!savedDate && savedTime < '09:00:00');
+      if (isStale) {
         delete tradeLogs[today][name];
         staleCleared = true;
       }
@@ -3139,7 +3152,7 @@ function renderTradeLogs() {
           <span class="tl-day-meta">
             ${nPlaced  ? `<span style="color:var(--green)">${nPlaced} placed</span>` : ''}
             ${nSkipped ? `<span style="color:var(--red)">${nSkipped} skip</span>` : ''}
-            ${nPassed  ? `<span style="color:var(--dim)">${nPassed} missed</span>` : ''}
+            ${nPassed  ? `<span style="color:var(--dim)">${nPassed} no signal</span>` : ''}
           </span>
           <span class="tl-chevron" id="tlc-d-${date}">${date===today?'▼':'▶'}</span>
         </div>
@@ -3191,6 +3204,16 @@ function tlToggleSlot(sid) {
   body.style.display = open ? 'none' : 'block';
   if (chev) chev.textContent = open ? '▶' : '▼';
 }
+function clearTodayLogs() {
+  const today = getISTDate();
+  if (tradeLogs[today]) {
+    delete tradeLogs[today];
+    saveTradeLogs();
+    renderTradeLogs();
+    lg(`Trade logs cleared for ${today}`, 'i');
+  }
+}
+
 function clearTradeLogs() {
   if (!confirm('Clear all trade logs? This cannot be undone.')) return;
   tradeLogs = {};
