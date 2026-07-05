@@ -414,9 +414,11 @@ async function getAvailableFunds() {
 // ══════════════════════════════════════════════════════════
 // ORDERS
 // ══════════════════════════════════════════════════════════
-async function placeMarket(instrKey, txn, qty) {
+async function placeMarket(instrKey, txn, qty, productType) {
+  // productType: 'I' = MIS (intraday), 'D' = NRML (delivery/overnight)
+  const product = productType === 'D' ? 'D' : 'I';
   const d = await upstox('/v2/order/place', 'POST', {
-    quantity: qty, product: 'I', validity: 'DAY', price: 0,
+    quantity: qty, product: product, validity: 'DAY', price: 0,
     tag: 'nifty_cloud', instrument_token: instrKey,
     order_type: 'MARKET', transaction_type: txn,
     disclosed_quantity: 0, trigger_price: 0, is_amo: false
@@ -489,8 +491,9 @@ async function onEntry() {
     }
     const qty = ST.config.lots * cfg.lotSize;
     ST.status = 'placed';
-    lg(`📤 BUY MARKET — ${strike}${cfg.dir} × ${qty}`, 'i');
-    const orderId = await placeMarket(key, 'BUY', qty);
+    const prodType = cfg.productType || 'I';  // D=NRML, I=MIS
+    lg(`📤 BUY MARKET — ${strike}${cfg.dir} × ${qty} [${prodType==='D'?'NRML':'MIS'}]`, 'i');
+    const orderId = await placeMarket(key, 'BUY', qty, prodType);
     ST.entryOrderId = orderId;
     lg(`✅ Order placed: ${orderId}`, 's');
     const fillPx = await waitFill(orderId);
@@ -544,8 +547,9 @@ async function doSquareOff(reason) {
   ST.status = 'exiting';
   const qty = ST.config.lots * ST.config.lotSize;
   try {
-    lg(`📤 Square off (${reason}) — SELL ${qty}`, 'i');
-    const orderId = await placeMarket(ST.instr.key, 'SELL', qty);
+    const prodType = ST.config.productType || 'I';
+    lg(`📤 Square off (${reason}) — SELL ${qty} [${prodType==='D'?'NRML':'MIS'}]`, 'i');
+    const orderId = await placeMarket(ST.instr.key, 'SELL', qty, prodType);
     ST.exitOrderId = orderId;
     ST.status = 'done';
     ST.armed  = false;
@@ -702,6 +706,33 @@ function scheduleSlot(slot) {
     return;
   }
 
+  // ── Day-of-week filter ──────────────────────────────────────
+  // dayFilter: [0=Mon,1=Tue,2=Wed,3=Thu,4=Fri] — slot fires only on these days
+  // Converts to JS getUTCDay: Mon=1,Tue=2,Wed=3,Thu=4,Fri=5
+  if (slot.dayFilter && slot.dayFilter.length > 0) {
+    const ist = new Date(Date.now() + 5.5*3600000);
+    const jsDay = ist.getUTCDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri
+    const slotDow = jsDay === 0 ? -1 : jsDay - 1; // convert to 0=Mon..4=Fri
+    if (!slot.dayFilter.includes(slotDow)) {
+      lg(`[Auto] "${slot.name}": day filter — not active today`, 'i');
+      SLOT_STATUS[slot.id] = 'passed';
+      return;
+    }
+  }
+
+  // ── Expiry day check ────────────────────────────────────────
+  // skipOnExpiry: true → skip this slot on NF expiry days
+  // NF expiry is permanently TUESDAY (since Sep 1 2025)
+  if (slot.skipOnExpiry) {
+    const ist = new Date(Date.now() + 5.5*3600000);
+    const dow = ist.getUTCDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+    if (dow === 2) {  // Tuesday = NF expiry day
+      lg(`[Auto] "${slot.name}": skipOnExpiry — skipping (Tuesday expiry day)`, 'w');
+      SLOT_STATUS[slot.id] = 'passed';
+      return;
+    }
+  }
+
   const entryTs = timeStrToTs(slot.entryTime);
   const ms = entryTs - Date.now();
   if (ms < -60000) { // more than 1 min past — skip
@@ -827,6 +858,13 @@ const server = http.createServer(async (req, res) => {
   const ok  = (d, code = 200) => { res.writeHead(code, { ...CORS, 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p   = url.pathname;
+
+  // ── GET /engine/token ───────────────────────────────────
+  // Returns current token (for use in download scripts)
+  if (p === '/engine/token' && req.method === 'GET') {
+    if (!ST.token) return ok({ ok: false, error: 'No token — connect to Upstox first' });
+    return ok({ ok: true, token: ST.token });
+  }
 
   // ── POST /engine/token ──────────────────────────────────
   if (p === '/engine/token' && req.method === 'POST') {
