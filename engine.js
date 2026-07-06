@@ -544,6 +544,8 @@ async function monitorTick() {
 async function doSquareOff(reason) {
   if (!ST.instr) { lg('Nothing to square off', 'w'); return; }
   clearInterval(ST._monitorIvl);
+  clearTimeout(ST._exitTimer);   // ← cancel exit timer to prevent double-sell
+  ST._exitTimer = null;
   ST.status = 'exiting';
   const qty = ST.config.lots * ST.config.lotSize;
   try {
@@ -553,6 +555,7 @@ async function doSquareOff(reason) {
     ST.exitOrderId = orderId;
     ST.status = 'done';
     ST.armed  = false;
+    clearStateFile();  // clear immediately so restart doesn't re-trigger
     const sign = (ST.pnl || 0) >= 0 ? '+' : '';
     lg(`🏁 Trade closed. P&L: ${sign}₹${ST.pnl?.toFixed(0) || '?'}`, 's');
     clearStateFile();
