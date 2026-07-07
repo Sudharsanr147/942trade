@@ -372,7 +372,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.9 · 07-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.0 · 07-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -4727,25 +4727,28 @@ async function liveTestRun() {
       const bc = slot.fired ? 'var(--green)' : 'var(--bdr)';
       const tc = slot.fired ? 'var(--green)' : 'var(--dim)';
       const bg = slot.fired ? 'rgba(0,212,120,.06)' : 'transparent';
-      html += `<div style="margin-bottom:5px;border:1px solid ${bc};border-radius:5px;
-                            padding:7px 9px;background:${bg}">
-        <div style="display:flex;justify-content:space-between;margin-bottom:${slot.fired?'4px':'0'}">
+      const icon = slot.fired ? `✅ BUY ${slot.direction}` : '⛔ no signal';
+      html += `<div style="margin-bottom:6px;border:1px solid ${bc};border-radius:5px;padding:7px;background:${bg}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
           <b style="font-size:11px;color:${tc}">${slot.name}</b>
-          <span style="font-size:10px;color:${tc}">
-            ${slot.fired ? `✅ BUY ${slot.direction}` : '⛔ no signal'}
-          </span>
+          <span style="font-size:10px;color:${tc}">${icon}</span>
         </div>
-        <div style="font-size:9px;color:var(--dim)">${slot.entry} → ${slot.exit}</div>`;
-
-      if (slot.fired) {
+        <div style="font-size:9px;color:var(--dim);margin-bottom:3px">${slot.entry} → ${slot.exit}</div>`;
+      // Show condition detail for ALL slots (fired and no-signal)
+      if (slot.sets && slot.sets.length > 0) {
         for (const set of slot.sets) {
-          html += `<div style="font-size:9px;color:var(--green);margin-top:3px">
-            ✅ ${set.set}</div>`;
+          const sc = set.pass ? 'var(--green)' : 'rgba(255,60,60,0.9)';
+          html += `<div style="font-size:10px;color:${sc};margin-top:3px">
+            ${set.pass ? '✅' : '❌'} <b>${set.set}</b> → ${set.dir}</div>`;
           for (const c of set.conds) {
-            html += `<div style="font-size:9px;color:var(--green);
-                          padding-left:8px;font-family:monospace">✓ ${c.msg}</div>`;
+            const cc = c.pass ? 'var(--green)' : 'var(--red)';
+            const tick = c.pass ? '✓' : '✗';
+            html += `<div style="font-size:9px;color:${cc};padding-left:10px;font-family:monospace;line-height:1.6">
+              ${tick} ${c.msg}</div>`;
           }
         }
+      } else {
+        html += `<div style="font-size:9px;color:var(--dim);padding:2px 0">No conditions defined</div>`;
       }
       html += '</div>';
     }
