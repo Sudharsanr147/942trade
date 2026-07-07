@@ -407,7 +407,8 @@ async function getLiveExpiry(inst) {
     try {
       const d = await upstox(`/v2/option/chain?instrument_key=${key}&expiry_date=${expiry}`);
       if (Array.isArray(d?.data) && d.data.length > 0) {
-        lg(`📅 Confirmed: ${expiry} (${d.data.length} strikes)`, 's'); return expiry;\n      }
+        lg(`📅 Confirmed: ${expiry} (${d.data.length} strikes)`, 's'); return expiry;
+      }
     } catch(_) {}
   }
   return candidates[0];
