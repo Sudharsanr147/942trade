@@ -83,6 +83,7 @@ html,body {
   display:flex; overflow-x:auto; -webkit-overflow-scrolling:touch;
   background:var(--s1); border-top:1px solid var(--bdr); flex-shrink:0;
   padding-bottom:env(safe-area-inset-bottom,0); scrollbar-width:none;
+  position:fixed; bottom:0; left:0; right:0; z-index:100;
 }
 #nav::-webkit-scrollbar { display:none; }
 .nb {
@@ -371,7 +372,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.8 · 07-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.9 · 07-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -925,7 +926,31 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- Historical log -->
   <div id="bt-history" style="margin-top:16px"></div>
 
-  </div>
+  </div> <!-- end subtab-replay -->
+
+  <!-- ── LIVE TEST PANEL ─────────────────────────── -->
+  <div id="subtab-test" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Live Slot Test</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="test-subtitle">Auto-refreshes every 3 min</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="test-countdown" style="font-size:10px;color:var(--dim)"></span>
+        <button onclick="liveTestRun()" id="test-run-btn"
+          style="background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.3);
+                 color:var(--amber);padding:6px 12px;border-radius:6px;
+                 font-size:11px;font-weight:600;cursor:pointer">
+          🔬 Run Now
+        </button>
+      </div>
+    </div>
+    <div id="live-test-results" style="padding-bottom:20px">
+      <div style="text-align:center;padding:32px;color:var(--dim);font-size:12px">
+        Switching to this tab fetches live candles and tests all slots automatically.
+      </div>
+    </div>
+  </div> <!-- end subtab-test -->
 
 </div><!-- /#content -->
 
