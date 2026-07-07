@@ -414,9 +414,49 @@ async function getAvailableFunds() {
 // ══════════════════════════════════════════════════════════
 // ORDERS
 // ══════════════════════════════════════════════════════════
-async function placeMarket(instrKey, txn, qty, productType) {
+// Upstox freeze limit is 1800 shares, but orders must be in whole lots.
+// NIFTY lot = 65, so max per order = floor(1800/65)*65 = 27*65 = 1755
+// BN lot = 30, so max per order = floor(1800/30)*30 = 60*30 = 1800
+function getFreezeQty(instrKey, lotSize) {
+  const UPSTOX_FREEZE = 1800;
+  const ls = lotSize || 65;
+  // Round down to nearest whole lot
+  return Math.floor(UPSTOX_FREEZE / ls) * ls;
+}
+
+async function placeMarket(instrKey, txn, qty, productType, lotSize) {
   // productType: 'I' = MIS (intraday), 'D' = NRML (delivery/overnight)
   const product = productType === 'D' ? 'D' : 'I';
+  const freeze  = getFreezeQty(instrKey, lotSize);
+
+  // Split into chunks if qty exceeds freeze limit
+  if (qty > freeze) {
+    lg(`⚡ Order slicing: ${qty} qty > ${freeze} freeze limit — splitting into chunks`, 'w');
+    const chunks = [];
+    let remaining = qty;
+    while (remaining > 0) {
+      chunks.push(Math.min(remaining, freeze));
+      remaining -= freeze;
+    }
+    lg(`⚡ Placing ${chunks.length} sliced orders: ${chunks.join(' + ')} = ${qty}`, 'i');
+    const orderIds = [];
+    for (const chunk of chunks) {
+      const d = await upstox('/v2/order/place', 'POST', {
+        quantity: chunk, product: product, validity: 'DAY', price: 0,
+        tag: 'nifty_cloud', instrument_token: instrKey,
+        order_type: 'MARKET', transaction_type: txn,
+        disclosed_quantity: 0, trigger_price: 0, is_amo: false
+      });
+      const id = d?.data?.order_id;
+      if (!id) throw new Error(`Slice order failed (chunk ${chunk})`);
+      orderIds.push(id);
+      lg(`⚡ Slice placed: ${id} (${chunk} qty)`, 'i');
+      await sleep(500);
+    }
+    return orderIds[0];
+  }
+
+  // Normal single order
   const d = await upstox('/v2/order/place', 'POST', {
     quantity: qty, product: product, validity: 'DAY', price: 0,
     tag: 'nifty_cloud', instrument_token: instrKey,
@@ -493,7 +533,7 @@ async function onEntry() {
     ST.status = 'placed';
     const prodType = cfg.productType || 'I';  // D=NRML, I=MIS
     lg(`📤 BUY MARKET — ${strike}${cfg.dir} × ${qty} [${prodType==='D'?'NRML':'MIS'}]`, 'i');
-    const orderId = await placeMarket(key, 'BUY', qty, prodType);
+    const orderId = await placeMarket(key, 'BUY', qty, prodType, cfg.lotSize);
     ST.entryOrderId = orderId;
     lg(`✅ Order placed: ${orderId}`, 's');
     const fillPx = await waitFill(orderId);
@@ -551,7 +591,7 @@ async function doSquareOff(reason) {
   try {
     const prodType = ST.config.productType || 'I';
     lg(`📤 Square off (${reason}) — SELL ${qty} [${prodType==='D'?'NRML':'MIS'}]`, 'i');
-    const orderId = await placeMarket(ST.instr.key, 'SELL', qty, prodType);
+    const orderId = await placeMarket(ST.instr.key, 'SELL', qty, prodType, ST.config.lotSize);
     ST.exitOrderId = orderId;
     ST.status = 'done';
     ST.armed  = false;
