@@ -334,16 +334,45 @@ function timeStrToTs(timeStr) {
 // ══════════════════════════════════════════════════════════
 // MARKET DATA
 // ══════════════════════════════════════════════════════════
-async function getNiftySpot() {
-  const d = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+// Instrument keys
+const INST_KEYS = {
+  NF: 'NSE_INDEX|Nifty 50',
+  BN: 'NSE_INDEX|Nifty Bank',
+};
+
+// NSE freeze limits (per single order, must be whole lots)
+// NIFTY lot=65: floor(1800/65)*65 = 1755
+// BN lot=30:    floor(900/30)*30  = 900
+const FREEZE = { NF: 1755, BN: 900 };
+
+function getInstKey(inst) {
+  return INST_KEYS[inst] || INST_KEYS.NF;
+}
+
+// Detect instrument from slot name or config
+// BN slots have name starting with 'BN' or lotSize=30
+function detectInst(cfg) {
+  if (!cfg) return 'NF';
+  if (cfg.inst) return cfg.inst;
+  if (cfg.lotSize === 30) return 'BN';
+  if (cfg.name && cfg.name.startsWith('BN')) return 'BN';
+  return 'NF';
+}
+
+async function getSpot(inst) {
+  const key = encodeURIComponent(getInstKey(inst));
+  const d = await upstox(`/v2/market-quote/ltp?instrument_key=${key}`);
   const ltp = Object.values(d?.data || {})[0]?.last_price;
-  if (!ltp) throw new Error('NIFTY spot unavailable');
+  if (!ltp) throw new Error(`${inst} spot unavailable`);
   return parseFloat(ltp);
 }
 
-// Single batched call for spot + option LTP — avoids rate limiting
-async function getSpotAndOptLTP(optInstrKey) {
-  const keys = 'NSE_INDEX%7CNifty%2050,' + encodeURIComponent(optInstrKey);
+// Legacy alias
+async function getNiftySpot() { return getSpot('NF'); }
+
+async function getSpotAndOptLTP(optInstrKey, inst) {
+  const idxKey = encodeURIComponent(getInstKey(inst || 'NF'));
+  const keys   = idxKey + ',' + encodeURIComponent(optInstrKey);
   const d = await upstox(`/v2/market-quote/ltp?instrument_key=${keys}`);
   let spot = 0, optLTP = 0;
   for (const [k, v] of Object.entries(d?.data || {})) {
@@ -353,8 +382,9 @@ async function getSpotAndOptLTP(optInstrKey) {
   return { spot, optLTP };
 }
 
-async function getLiveExpiry() {
-  const key = encodeURIComponent('NSE_INDEX|Nifty 50');
+async function getLiveExpiry(inst) {
+  const key = encodeURIComponent(getInstKey(inst || 'NF'));
+  // BN: monthly expiry (last Tuesday). NF: weekly Tuesday.
   try {
     const d = await upstox(`/v2/option/chain?instrument_key=${key}`);
     const expiries = d?.data?.expiry_list || d?.data?.expiryList;
@@ -377,20 +407,19 @@ async function getLiveExpiry() {
     try {
       const d = await upstox(`/v2/option/chain?instrument_key=${key}&expiry_date=${expiry}`);
       if (Array.isArray(d?.data) && d.data.length > 0) {
-        lg(`📅 Confirmed: ${expiry} (${d.data.length} strikes)`, 's'); return expiry;
-      }
+        lg(`📅 Confirmed: ${expiry} (${d.data.length} strikes)`, 's'); return expiry;\n      }
     } catch(_) {}
   }
   return candidates[0];
 }
 
-async function findInstrument(expiry, strike, type) {
-  const key = encodeURIComponent('NSE_INDEX|Nifty 50');
+async function findInstrument(expiry, strike, type, inst) {
+  const key = encodeURIComponent(getInstKey(inst || 'NF'));
   const d = await upstox(`/v2/option/chain?instrument_key=${key}&expiry_date=${expiry}`);
   const chain = d?.data;
   if (!Array.isArray(chain) || !chain.length) throw new Error('Chain empty for ' + expiry);
   const row = chain.find(r => Math.round(r.strike_price) === strike);
-  if (!row) throw new Error(`Strike ${strike} not found`);
+  if (!row) throw new Error(`Strike ${strike} not found in ${inst||'NF'} chain`);
   const side = type === 'CE' ? row.call_options : row.put_options;
   if (!side?.instrument_key) throw new Error(`${type} key missing`);
   return { key: side.instrument_key, ltp: parseFloat(side?.market_data?.ltp) || 0 };
@@ -414,57 +443,63 @@ async function getAvailableFunds() {
 // ══════════════════════════════════════════════════════════
 // ORDERS
 // ══════════════════════════════════════════════════════════
-// Upstox freeze limit is 1800 shares, but orders must be in whole lots.
-// NIFTY lot = 65, so max per order = floor(1800/65)*65 = 27*65 = 1755
-// BN lot = 30, so max per order = floor(1800/30)*30 = 60*30 = 1800
-function getFreezeQty(instrKey, lotSize) {
-  const UPSTOX_FREEZE = 1800;
+// NSE freeze limits per order (must be whole lots)
+// NIFTY lot=65: floor(1800/65)*65 = 1755
+// BN    lot=30: floor(900/30)*30  = 900
+function getFreezeQty(lotSize) {
   const ls = lotSize || 65;
-  // Round down to nearest whole lot
-  return Math.floor(UPSTOX_FREEZE / ls) * ls;
+  const nseLimit = ls === 30 ? 900 : 1800;  // BN=900, NF=1800
+  return Math.floor(nseLimit / ls) * ls;
 }
 
 async function placeMarket(instrKey, txn, qty, productType, lotSize) {
-  // productType: 'I' = MIS (intraday), 'D' = NRML (delivery/overnight)
   const product = productType === 'D' ? 'D' : 'I';
-  const freeze  = getFreezeQty(instrKey, lotSize);
+  const ls      = lotSize || 65;
 
-  // Split into chunks if qty exceeds freeze limit
+  // Ensure qty is a multiple of lotSize
+  if (qty % ls !== 0) {
+    const adj = Math.floor(qty / ls) * ls;
+    lg(`⚠️ qty ${qty} not multiple of ${ls} → adjusted to ${adj}`, 'w');
+    qty = adj;
+  }
+  if (qty <= 0) throw new Error('Quantity is 0 after lot-size adjustment');
+
+  const freeze = getFreezeQty(ls);
+
   if (qty > freeze) {
-    lg(`⚡ Order slicing: ${qty} qty > ${freeze} freeze limit — splitting into chunks`, 'w');
     const chunks = [];
-    let remaining = qty;
-    while (remaining > 0) {
-      chunks.push(Math.min(remaining, freeze));
-      remaining -= freeze;
+    let rem = qty;
+    while (rem > 0) {
+      const chunk = Math.min(rem, freeze);
+      const safe  = Math.floor(chunk / ls) * ls;
+      if (safe > 0) { chunks.push(safe); rem -= safe; } else break;
     }
-    lg(`⚡ Placing ${chunks.length} sliced orders: ${chunks.join(' + ')} = ${qty}`, 'i');
+    lg(`⚡ Slicing ${qty} into ${chunks.length} orders: ${chunks.join(' + ')} (lotSize=${ls} freeze=${freeze})`, 'w');
     const orderIds = [];
     for (const chunk of chunks) {
       const d = await upstox('/v2/order/place', 'POST', {
-        quantity: chunk, product: product, validity: 'DAY', price: 0,
+        quantity: chunk, product, validity: 'DAY', price: 0,
         tag: 'nifty_cloud', instrument_token: instrKey,
         order_type: 'MARKET', transaction_type: txn,
         disclosed_quantity: 0, trigger_price: 0, is_amo: false
       });
       const id = d?.data?.order_id;
-      if (!id) throw new Error(`Slice order failed (chunk ${chunk})`);
+      if (!id) throw new Error(`Slice failed (${chunk} qty): ${JSON.stringify(d?.errors)}`);
       orderIds.push(id);
-      lg(`⚡ Slice placed: ${id} (${chunk} qty)`, 'i');
-      await sleep(500);
+      lg(`⚡ Slice OK: ${id} — ${chunk/ls} lots (${chunk} qty)`, 'i');
+      await sleep(600);
     }
     return orderIds[0];
   }
 
-  // Normal single order
   const d = await upstox('/v2/order/place', 'POST', {
-    quantity: qty, product: product, validity: 'DAY', price: 0,
+    quantity: qty, product, validity: 'DAY', price: 0,
     tag: 'nifty_cloud', instrument_token: instrKey,
     order_type: 'MARKET', transaction_type: txn,
     disclosed_quantity: 0, trigger_price: 0, is_amo: false
   });
   const id = d?.data?.order_id;
-  if (!id) throw new Error('No order_id returned');
+  if (!id) throw new Error(`Order failed: ${JSON.stringify(d?.errors)}`);
   return id;
 }
 
@@ -498,13 +533,16 @@ async function onEntry() {
   ST.status = 'ready';
   const cfg = ST.config;
   try {
-    const spot = await getNiftySpot();
+    const inst   = detectInst(cfg);
+    const spot   = await getSpot(inst);
     ST.spotPrice = spot;
-    const atm    = Math.round(spot / cfg.step) * cfg.step;
-    const strike = cfg.dir === 'CE' ? atm + cfg.otm * cfg.step : atm - cfg.otm * cfg.step;
-    const expiry = await getLiveExpiry();
-    lg(`Spot: ${spot.toFixed(2)} | ATM: ${atm} | Strike: ${strike}${cfg.dir} | Expiry: ${expiry}`, 'i');
-    const { key, ltp } = await findInstrument(expiry, strike, cfg.dir);
+    const step   = cfg.step || 50;
+    const atm    = Math.round(spot / step) * step;
+    const otm    = cfg.otm || 1;
+    const strike = cfg.dir === 'CE' ? atm + otm*step : atm - otm*step;
+    const expiry = await getLiveExpiry(inst);
+    lg(`Spot: ${spot.toFixed(2)} | ATM: ${atm} | Strike: ${strike}${cfg.dir} | Expiry: ${expiry} | ${inst}`, 'i');
+    const { key, ltp } = await findInstrument(expiry, strike, cfg.dir, inst);
     ST.instr = { key, strike, type: cfg.dir, expiry };
     ST.optionPrice = ltp;
     // Auto-lots
@@ -531,7 +569,7 @@ async function onEntry() {
     }
     const qty = ST.config.lots * cfg.lotSize;
     ST.status = 'placed';
-    const prodType = cfg.productType || 'I';  // D=NRML, I=MIS
+    const prodType = cfg.productType || 'D';  // D=NRML, I=MIS
     lg(`📤 BUY MARKET — ${strike}${cfg.dir} × ${qty} [${prodType==='D'?'NRML':'MIS'}]`, 'i');
     const orderId = await placeMarket(key, 'BUY', qty, prodType, cfg.lotSize);
     ST.entryOrderId = orderId;
@@ -563,7 +601,7 @@ async function monitorTick() {
     clearInterval(ST._monitorIvl); ST.status = 'error'; return;
   }
   try {
-    const { spot, optLTP } = await getSpotAndOptLTP(ST.instr.key);
+    const { spot, optLTP } = await getSpotAndOptLTP(ST.instr.key, ST.config?.inst || 'NF');
     ST.spotPrice   = spot;
     ST.optionPrice = optLTP;
     if (ST.entryPrice !== null)
@@ -589,7 +627,7 @@ async function doSquareOff(reason) {
   ST.status = 'exiting';
   const qty = ST.config.lots * ST.config.lotSize;
   try {
-    const prodType = ST.config.productType || 'I';
+    const prodType = ST.config.productType || 'D';
     lg(`📤 Square off (${reason}) — SELL ${qty} [${prodType==='D'?'NRML':'MIS'}]`, 'i');
     const orderId = await placeMarket(ST.instr.key, 'SELL', qty, prodType, ST.config.lotSize);
     ST.exitOrderId = orderId;
@@ -855,15 +893,20 @@ async function armFromAutoSlot(slot, direction) {
   clearTimers();
 
   const exitTs = timeStrToTs(slot.exitTime);
+  const lotSize = slot.lotSize || 75;  // default NIFTY lot size
+  const inst    = (slot.lotSize === 30 || (slot.name||'').startsWith('BN')) ? 'BN' : 'NF';
 
   const config = {
     dir: direction,
     otm: slot.otm, step: slot.step,
     sl: slot.sl, tgt: slot.tgt,
-    lots: slot.lots, lotSize: slot.lotSize,
+    lots: slot.lots, lotSize: lotSize,
     autoLots: slot.autoLots || false,
     deployPct: slot.deployPct || 90,
     floorPremium: slot.floorPremium || 0,
+    productType: slot.productType || 'D',  // ← NRML by default
+    inst: inst,   // ← NF or BN
+    name: slot.name,
     exitTs,
   };
 
@@ -1270,16 +1313,18 @@ const server = http.createServer(async (req, res) => {
         // 5. Instrument lookup (dry run — don't place order)
         say('Checking instrument availability (dry run)...');
         try {
-          const spot   = await getNiftySpot();
-          const atm    = Math.round(spot / slot.step) * slot.step;
+          const slotInst = (slot.lotSize===30||(slot.name||'').startsWith('BN')) ? 'BN' : 'NF';
+          const spot   = await getSpot(slotInst);
+          const step   = slot.step || 50;
+          const atm    = Math.round(spot / step) * step;
           const otm    = slot.otm || 1;
-          const strike = firedSet.direction === 'CE' ? atm + otm*slot.step : atm - otm*slot.step;
-          say(`Spot=${spot.toFixed(2)} ATM=${atm} Strike=${strike}${firedSet.direction} OTM=${otm}`);
-          const expiry = await getLiveExpiry();
+          const strike = firedSet.direction === 'CE' ? atm + otm*step : atm - otm*step;
+          say(`${slotInst} Spot=${spot.toFixed(2)} ATM=${atm} Strike=${strike}${firedSet.direction} OTM=${otm}`);
+          const expiry = await getLiveExpiry(slotInst);
           say(`Expiry: ${expiry}`);
-          const { key, ltp } = await findInstrument(expiry, strike, firedSet.direction);
+          const { key, ltp } = await findInstrument(expiry, strike, firedSet.direction, slotInst);
           say(`✅ Instrument found: ${key} LTP=${ltp}`, 's');
-          say(`WOULD PLACE: BUY ${strike}${firedSet.direction} @ ~${ltp} | SL=${slot.sl}opt TGT=${slot.tgt}opt`, 's');
+          say(`WOULD PLACE: BUY ${slotInst} ${strike}${firedSet.direction} @ ~${ltp} | SL=${slot.sl} TGT=${slot.tgt}`, 's');
         } catch(ie) {
           say(`❌ Instrument lookup failed: ${ie.message}`, 'e');
         }
