@@ -371,7 +371,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.6 · 01-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v4.8 · 07-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -782,11 +782,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </details>
 
     <!-- SR Slot cards -->
-    <div style="margin-bottom:8px">
-      <button onclick="a1TestSlot()" style="width:100%;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);color:var(--amber);padding:8px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer">
-        🔬 Test All Slots on Live Candles
-      </button>
-    </div>
+
     <div id="a1-slot-list"></div>
 
     <!-- VM status cards -->
@@ -850,6 +846,22 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- ══ BACKTEST TAB ══════════════════════════════ -->
   <div class="tab" id="t-bt">
 
+  <!-- Sub-tab switcher -->
+  <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden">
+    <button id="subtab-replay-btn" onclick="switchSubTab('replay')"
+      style="flex:1;padding:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;
+             background:var(--blue);color:#fff" >
+      ▶ Replay
+    </button>
+    <button id="subtab-test-btn" onclick="switchSubTab('test')"
+      style="flex:1;padding:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;
+             background:var(--s2);color:var(--dim)">
+      🔬 Live Test
+    </button>
+  </div>
+
+  <!-- REPLAY PANEL -->
+  <div id="subtab-replay">
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
     <div>
@@ -1780,6 +1792,17 @@ setInterval(() => {
    UI HELPERS
 ════════════════════════════════════════════════════ */
 function go(tab) {
+  // If navigating to Replay tab and Live Test sub-tab is active → refresh
+  if (tab === 'bt') {
+    const testPanel = q('subtab-test');
+    if (testPanel && testPanel.style.display !== 'none') {
+      // User returned to Replay tab with Live Test open — refresh immediately
+      setTimeout(() => liveTestRun(), 100);
+      // Reset the countdown
+      stopLiveTestTimer();
+      startLiveTestTimer();
+    }
+  }
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
   q('t-' + tab).classList.add('on');
@@ -4585,6 +4608,132 @@ async function btDownloadCandles(dateStr) {
     lg(`Downloaded candles for ${date}`, 'i');
   } catch(e) {
     alert(`Download failed: ${e.message}`);
+  }
+}
+
+// ── Sub-tab switcher ─────────────────────────────────────────
+let _liveTestTimer = null;
+let _liveTestCountdown = null;
+const LIVE_TEST_INTERVAL = 3 * 60; // 3 minutes
+
+function switchSubTab(tab) {
+  const replay = q('subtab-replay');
+  const test   = q('subtab-test');
+  const rbtn   = q('subtab-replay-btn');
+  const tbtn   = q('subtab-test-btn');
+  if (tab === 'replay') {
+    if (replay) replay.style.display = 'block';
+    if (test)   test.style.display   = 'none';
+    if (rbtn) { rbtn.style.background='var(--blue)'; rbtn.style.color='#fff'; }
+    if (tbtn) { tbtn.style.background='var(--s2)';   tbtn.style.color='var(--dim)'; }
+    stopLiveTestTimer();
+  } else {
+    if (replay) replay.style.display = 'none';
+    if (test)   test.style.display   = 'block';
+    if (rbtn) { rbtn.style.background='var(--s2)';   rbtn.style.color='var(--dim)'; }
+    if (tbtn) { tbtn.style.background='var(--amber)'; tbtn.style.color='#000'; }
+    startLiveTestTimer();
+    liveTestRun(); // run immediately on switch — also on every return to this tab
+  }
+}
+
+function startLiveTestTimer() {
+  stopLiveTestTimer();
+  let secs = LIVE_TEST_INTERVAL;
+  const cd = q('test-countdown');
+  _liveTestCountdown = setInterval(() => {
+    secs--;
+    if (cd) cd.textContent = `Next refresh in ${secs}s`;
+    if (secs <= 0) {
+      secs = LIVE_TEST_INTERVAL;
+      liveTestRun();
+    }
+  }, 1000);
+}
+
+function stopLiveTestTimer() {
+  if (_liveTestTimer)    { clearTimeout(_liveTestTimer);   _liveTestTimer = null; }
+  if (_liveTestCountdown){ clearInterval(_liveTestCountdown); _liveTestCountdown = null; }
+  const cd = q('test-countdown');
+  if (cd) cd.textContent = '';
+}
+
+async function liveTestRun() {
+  if (!ST.workerUrl) {
+    q('live-test-results').innerHTML =
+      '<div style="text-align:center;padding:20px;color:var(--red)">Not connected to VM</div>';
+    return;
+  }
+  const btn = q('test-run-btn');
+  if (btn) { btn.textContent = '⏳ Running...'; btn.disabled = true; }
+  const cd = q('test-countdown');
+  if (cd) cd.textContent = 'Running...';
+
+  try {
+    const r = await fetch(`${engineUrl()}/engine/test/all`);
+    const d = await r.json();
+    if (!d.ok) {
+      q('live-test-results').innerHTML =
+        `<div style="color:var(--red);padding:10px">❌ ${d.error}</div>`;
+      return;
+    }
+    const fired   = d.results.filter(x => x.fired);
+    const nofired = d.results.filter(x => !x.fired);
+    const now = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+    let html = `<div style="margin-bottom:8px;padding:6px 8px;background:var(--s3);
+        border-radius:5px;font-size:10px;display:flex;justify-content:space-between">
+      <span>📡 ${d.candles} candles · latest: <b>${d.latestCandle}</b></span>
+      <span style="color:var(--dim)">Updated ${now}</span>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
+      <span style="background:rgba(0,212,120,.12);color:var(--green);
+            padding:3px 8px;border-radius:10px;font-weight:600">
+        ✅ ${fired.length} firing
+      </span>
+      <span style="background:var(--s3);color:var(--dim);
+            padding:3px 8px;border-radius:10px">
+        ⛔ ${nofired.length} no signal
+      </span>
+    </div>`;
+
+    // Fired slots first, highlighted
+    for (const slot of [...fired, ...nofired]) {
+      const bc = slot.fired ? 'var(--green)' : 'var(--bdr)';
+      const tc = slot.fired ? 'var(--green)' : 'var(--dim)';
+      const bg = slot.fired ? 'rgba(0,212,120,.06)' : 'transparent';
+      html += `<div style="margin-bottom:5px;border:1px solid ${bc};border-radius:5px;
+                            padding:7px 9px;background:${bg}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:${slot.fired?'4px':'0'}">
+          <b style="font-size:11px;color:${tc}">${slot.name}</b>
+          <span style="font-size:10px;color:${tc}">
+            ${slot.fired ? `✅ BUY ${slot.direction}` : '⛔ no signal'}
+          </span>
+        </div>
+        <div style="font-size:9px;color:var(--dim)">${slot.entry} → ${slot.exit}</div>`;
+
+      if (slot.fired) {
+        for (const set of slot.sets) {
+          html += `<div style="font-size:9px;color:var(--green);margin-top:3px">
+            ✅ ${set.set}</div>`;
+          for (const c of set.conds) {
+            html += `<div style="font-size:9px;color:var(--green);
+                          padding-left:8px;font-family:monospace">✓ ${c.msg}</div>`;
+          }
+        }
+      }
+      html += '</div>';
+    }
+    q('live-test-results').innerHTML = html;
+    if (cd) {
+      let secs = LIVE_TEST_INTERVAL;
+      cd.textContent = `Next refresh in ${secs}s`;
+    }
+  } catch(e) {
+    q('live-test-results').innerHTML =
+      `<div style="color:var(--red);padding:10px">❌ ${e.message}</div>`;
+  } finally {
+    if (btn) { btn.textContent = '🔬 Run Now'; btn.disabled = false; }
   }
 }
 
