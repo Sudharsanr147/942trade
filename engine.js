@@ -382,18 +382,55 @@ async function getSpotAndOptLTP(optInstrKey, inst) {
   return { spot, optLTP };
 }
 
+// Compute Bank Nifty monthly expiry = last Tuesday of current month
+// If that Tuesday has passed, use next month's last Tuesday
+function getBNExpiry() {
+  const now  = new Date(Date.now() + 5.5*3600000); // IST
+  const year = now.getUTCFullYear();
+  const mon  = now.getUTCMonth(); // 0-indexed
+
+  function lastTuesdayOfMonth(y, m) {
+    // Last day of month
+    const last = new Date(Date.UTC(y, m+1, 0));
+    // Walk back to Tuesday (day 2)
+    const dow  = last.getUTCDay();
+    const diff = (dow >= 2) ? dow - 2 : dow + 5;
+    last.setUTCDate(last.getUTCDate() - diff);
+    return last.toISOString().slice(0,10);
+  }
+
+  const thisMonthExpiry = lastTuesdayOfMonth(year, mon);
+  const todayStr = now.toISOString().slice(0,10);
+
+  // If today is past this month's expiry, use next month
+  if (todayStr > thisMonthExpiry) {
+    const nextMon = mon === 11 ? 0 : mon + 1;
+    const nextYear = mon === 11 ? year + 1 : year;
+    return lastTuesdayOfMonth(nextYear, nextMon);
+  }
+  return thisMonthExpiry;
+}
+
 async function getLiveExpiry(inst) {
-  const key = encodeURIComponent(getInstKey(inst || 'NF'));
-  // BN: monthly expiry (last Tuesday). NF: weekly Tuesday.
+  // BN: compute monthly expiry directly (API requires expiry_date parameter)
+  if (inst === 'BN') {
+    const expiry = getBNExpiry();
+    lg(`📅 BN monthly expiry: ${expiry}`, 'i');
+    return expiry;
+  }
+
+  // NF: weekly Tuesday expiry — fetch from API
+  const key = encodeURIComponent(getInstKey('NF'));
   try {
     const d = await upstox(`/v2/option/chain?instrument_key=${key}`);
     const expiries = d?.data?.expiry_list || d?.data?.expiryList;
     if (Array.isArray(expiries) && expiries.length) {
       const today = localDateStr(new Date());
       const nearest = expiries.filter(e => e >= today).sort()[0];
-      if (nearest) { lg(`📅 Expiry: ${nearest}`, 'i'); return nearest; }
+      if (nearest) { lg(`📅 NF expiry: ${nearest}`, 'i'); return nearest; }
     }
   } catch(_) {}
+  // Fallback: compute next Tuesday
   const now = new Date(), day = now.getDay();
   const isTuOpen = day === 2 && (now.getHours() * 60 + now.getMinutes()) < 15 * 60 + 30;
   const ahead = isTuOpen ? 0 : ((2 - day + 7) % 7 || 7);
@@ -402,12 +439,13 @@ async function getLiveExpiry(inst) {
     const d = new Date(now); d.setDate(now.getDate() + ahead - i);
     if (d.getDay() !== 0) candidates.push(localDateStr(d));
   }
-  lg(`📅 Scanning: ${candidates.slice(0,3).join(', ')}`, 'i');
+  lg(`📅 NF scanning: ${candidates.slice(0,3).join(', ')}`, 'i');
   for (const expiry of candidates) {
     try {
       const d = await upstox(`/v2/option/chain?instrument_key=${key}&expiry_date=${expiry}`);
       if (Array.isArray(d?.data) && d.data.length > 0) {
-        lg(`📅 Confirmed: ${expiry} (${d.data.length} strikes)`, 's'); return expiry;
+        lg(`📅 NF confirmed: ${expiry} (${d.data.length} strikes)`, 's');
+        return expiry;
       }
     } catch(_) {}
   }
