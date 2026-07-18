@@ -332,6 +332,42 @@ function timeStrToTs(timeStr) {
 }
 
 // ══════════════════════════════════════════════════════════
+// ── AUTO-START TICK COLLECTOR ────────────────────────────────
+const { execSync: _execSync, spawn: _spawn } = require('child_process');
+const _fs2 = require('fs');
+const _path2 = require('path');
+
+function autoStartTickCollector() {
+  try {
+    const collectorPath = _path2.join(process.env.HOME || '/home/ubuntu', 'tick-collector.js');
+    if (!_fs2.existsSync(collectorPath)) {
+      lg('[Tick] tick-collector.js not on VM — skipping', 'i');
+      return;
+    }
+    // Market hours check: only block if it's AFTER 15:31 (market closed for day)
+    // If before market open, collector waits internally until 09:14
+    const ist  = new Date(Date.now() + 5.5 * 3600000);
+    const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    if (hhmm > 15 * 60 + 32) {
+      lg('[Tick] Market closed for today — collector not started', 'i');
+      return;
+    }
+    // Already running?
+    try {
+      const pid = _execSync("pgrep -f 'tick-collector.js'", { encoding: 'utf8' }).trim();
+      if (pid) { lg('[Tick] Collector already running PID=' + pid, 'i'); return; }
+    } catch(_) {}
+    // Launch detached
+    const child = _spawn('node', [collectorPath], {
+      detached: true, stdio: 'ignore', env: { ...process.env },
+    });
+    child.unref();
+    lg('[Tick] ✅ Tick collector started PID=' + child.pid, 's');
+  } catch(e) {
+    lg('[Tick] Auto-start failed: ' + e.message, 'w');
+  }
+}
+
 // MARKET DATA
 // ══════════════════════════════════════════════════════════
 // Instrument keys
@@ -996,6 +1032,8 @@ const server = http.createServer(async (req, res) => {
     if (!body.token) return ok({ ok: false, error: 'No token' }, 400);
     ST.token = body.token;
     lg('🔑 Token received', 's');
+    // Auto-start tick collector if market hours and collector installed
+    autoStartTickCollector();
     return ok({ ok: true });
   }
 
