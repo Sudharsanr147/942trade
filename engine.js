@@ -1016,9 +1016,9 @@ async function armFromAutoSlot(slot, direction) {
 // ══════════════════════════════════════════════════════════
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
-  let body = '';
+  let body = ''; let rawBody = '';
   if (req.method === 'POST') {
-    await new Promise(r => { req.on('data', c => body += c); req.on('end', r); });
+    await new Promise(r => { req.on('data', c => { body += c; rawBody += c; }); req.on('end', r); });
     try { body = JSON.parse(body); } catch(_) { body = {}; }
   }
   const ok  = (d, code = 200) => { res.writeHead(code, { ...CORS, 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
@@ -1546,6 +1546,45 @@ const server = http.createServer(async (req, res) => {
       say(`❌ Test failed: ${e.message}`, 'e');
       return ok({ ok: false, error: e.message, log });
     }
+  }
+
+  // ── POST /v2/login/authorization/token (OAuth proxy) ────
+  // App calls this to exchange auth code for access token
+  if (p === '/v2/login/authorization/token' && req.method === 'POST') {
+    try {
+      const d = await new Promise((resolve, reject) => {
+        const opts = {
+          hostname: 'api.upstox.com',
+          path: '/v2/login/authorization/token',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+            'Api-Version': '2.0',
+            'Content-Length': Buffer.byteLength(rawBody),
+          },
+        };
+        const r = require('https').request(opts, resp => {
+          let data = '';
+          resp.on('data', c => data += c);
+          resp.on('end', () => {
+            try { resolve({ status: resp.statusCode, body: JSON.parse(data) }); }
+            catch(e) { resolve({ status: resp.statusCode, body: data }); }
+          });
+        });
+        r.on('error', reject);
+        r.write(rawBody);
+        r.end();
+      });
+      res.writeHead(d.status, { ...CORS, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(d.body));
+      lg('OAuth token exchange: HTTP ' + d.status, d.status === 200 ? 's' : 'e');
+    } catch(e) {
+      lg('OAuth proxy error: ' + e.message, 'e');
+      res.writeHead(500, { ...CORS, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
   }
 
   ok({ error: 'Unknown endpoint' }, 404);
