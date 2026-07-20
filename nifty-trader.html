@@ -372,7 +372,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.0 · 07-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.2 · 07-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -688,6 +688,29 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       </div>
     </div>
 
+    <!-- Master ON/OFF toggle for SR strategy -->
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                background:var(--s2);border:1px solid var(--bdr);border-radius:8px;
+                padding:10px 12px;margin-bottom:10px">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--c1)">30-Slot SR System</div>
+        <div id="sr-master-status" style="font-size:10px;color:var(--green);margin-top:2px">
+          ✅ Active — engine will run all SR slots today
+        </div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+        <input type="checkbox" id="sr-master-toggle" checked
+          onchange="srMasterToggle(this.checked)"
+          style="opacity:0;width:0;height:0">
+        <span id="sr-toggle-track" style="position:absolute;top:0;left:0;right:0;bottom:0;
+          background:var(--green);border-radius:24px;transition:.3s">
+          <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;
+            background:#fff;border-radius:50%;transition:.3s;
+            transform:translateX(20px)" id="sr-toggle-knob"></span>
+        </span>
+      </label>
+    </div>
+
     <!-- Tuesday ATM banner -->
     <div style="background:rgba(124,92,255,.07);border:1px solid rgba(124,92,255,.2);border-radius:var(--r);padding:9px 12px;font-size:11px;color:var(--dim);line-height:1.5;margin-bottom:10px">
       <b style="color:var(--purple)">Tue:</b> ATM override auto-applied at push time.
@@ -952,6 +975,127 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
   </div> <!-- end subtab-test -->
 
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- STRADDLE TAB                                        -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="tab" id="t-straddle">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">
+          Straddle Engine
+        </div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="str-subtitle">
+          Vol surge detector · buys CE+PE · 6 spot TP · 3 spot SL
+        </div>
+      </div>
+      <!-- Master ON/OFF -->
+      <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+        <input type="checkbox" id="str-master-toggle" onchange="strMasterToggle(this.checked)"
+          style="opacity:0;width:0;height:0">
+        <span id="str-toggle-track" style="position:absolute;top:0;left:0;right:0;bottom:0;
+          background:var(--s3);border:1px solid var(--bdr);border-radius:24px;transition:.3s">
+          <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;
+            background:var(--dim);border-radius:50%;transition:.3s" id="str-toggle-knob"></span>
+        </span>
+      </label>
+    </div>
+
+    <!-- Status bar -->
+    <div id="str-status-bar" style="background:var(--s2);border:1px solid var(--bdr);
+         border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px">
+      <div style="color:var(--dim)">Toggle ON to activate straddle engine</div>
+    </div>
+
+    <!-- Params -->
+    <div style="background:var(--s2);border:1px solid var(--bdr);border-radius:8px;
+         padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+           color:var(--dim);margin-bottom:8px">Parameters</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+        <div>
+          <div style="color:var(--dim);margin-bottom:2px">TP (spot pts)</div>
+          <input id="str-tp" type="number" value="6" min="3" max="20" step="0.5"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
+                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:var(--dim);margin-bottom:2px">SL (spot pts)</div>
+          <input id="str-sl" type="number" value="3" min="1" max="10" step="0.5"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
+                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:var(--dim);margin-bottom:2px">Vol threshold (×avg)</div>
+          <input id="str-vol" type="number" value="2" min="1.5" max="5" step="0.5"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
+                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:var(--dim);margin-bottom:2px">Lots (manual fallback)</div>
+          <input id="str-lots" type="number" value="6" min="1" max="50" step="1"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
+                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:var(--dim);margin-bottom:2px">Deploy % of balance</div>
+          <input id="str-deploy" type="number" value="85" min="50" max="95" step="5"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
+                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:var(--dim);margin-bottom:2px">Floor premium (₹/share)</div>
+          <input id="str-floor" type="number" value="100" min="0" max="500" step="10"
+            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
+                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:var(--c1)">
+            <input type="checkbox" id="str-autolots" checked
+              style="width:16px;height:16px;accent-color:var(--green)">
+            <span>Auto-calculate lots from balance</span>
+            <span style="color:var(--dim);font-size:10px">(like SR system)</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live position -->
+    <div id="str-position" style="display:none;background:rgba(245,166,35,.08);
+         border:1px solid rgba(245,166,35,.3);border-radius:8px;
+         padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:6px">
+        ⚡ LIVE STRADDLE POSITION
+      </div>
+      <div id="str-pos-detail" style="font-size:11px;color:var(--c1);line-height:1.8"></div>
+      <button onclick="strManualExit()" style="margin-top:8px;width:100%;
+        background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);
+        color:var(--red);padding:7px;border-radius:6px;font-size:12px;
+        font-weight:600;cursor:pointer">⛔ Manual Exit Both Legs</button>
+    </div>
+
+    <!-- Today's trades -->
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);margin-bottom:6px" id="str-trades-header">TODAY'S TRADES</div>
+    <div id="str-trades" style="margin-bottom:10px">
+      <div style="color:var(--dim);font-size:11px;text-align:center;padding:16px">
+        No trades yet today
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);margin-bottom:4px">ENGINE LOG</div>
+    <div id="str-log" style="background:var(--s2);border:1px solid var(--bdr);
+         border-radius:6px;padding:8px;max-height:200px;overflow-y:auto;font-size:10px;
+         font-family:monospace;color:var(--dim);line-height:1.6">
+      Waiting for activation...
+    </div>
+
+  </div><!-- /#t-straddle -->
+
 </div><!-- /#content -->
 
 <!-- ══ BOTTOM NAV ════════════════════════════════════ -->
@@ -984,6 +1128,12 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
     Events
   </button>
+<button class="nb" id="nav-straddle" onclick="go('straddle')">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+  </svg>
+  Straddle
+</button>
 <button class="nb" id="nav-auto" onclick="go('auto')" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
     Auto
@@ -1817,6 +1967,11 @@ setInterval(() => {
    UI HELPERS
 ════════════════════════════════════════════════════ */
 function go(tab) {
+  // Straddle tab activation
+  if (tab === 'straddle') {
+    strRenderTrades();
+    strUpdatePositionUI(STR.niftySpot);
+  }
   // If navigating to Replay tab and Live Test sub-tab is active → refresh
   if (tab === 'bt') {
     const testPanel = q('subtab-test');
@@ -4635,6 +4790,326 @@ async function btDownloadCandles(dateStr) {
     alert(`Download failed: ${e.message}`);
   }
 }
+
+// ── SR Master Toggle ─────────────────────────────────────────
+function srMasterToggle(on) {
+  const track  = q('sr-toggle-track');
+  const knob   = q('sr-toggle-knob');
+  const status = q('sr-master-status');
+  if (on) {
+    track.style.background  = 'var(--green)';
+    knob.style.transform    = 'translateX(20px)';
+    knob.style.background   = '#fff';
+    status.style.color      = 'var(--green)';
+    status.textContent      = '✅ Active — engine will run all SR slots today';
+    // Tell engine to enable SR
+    fetch(engineUrl() + '/engine/sr-active', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({active: true})}).catch(()=>{});
+  } else {
+    track.style.background  = 'var(--red)';
+    knob.style.transform    = 'translateX(0)';
+    knob.style.background   = '#fff';
+    status.style.color      = 'var(--red)';
+    status.textContent      = '⛔ SR Deactivated — slots will not fire today';
+    fetch(engineUrl() + '/engine/sr-active', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({active: false})}).catch(()=>{});
+  }
+}
+
+// ── Straddle Engine ───────────────────────────────────────────
+let STR = {
+  active:      false,
+  timer:       null,
+  monTimer:    null,
+  position:    null,   // {ceKey, peKey, entrySpot, entryTime, ceLots, peLots}
+  trades:      [],
+  volHistory:  {},     // {symbol: [vol1, vol2, ...]} rolling 120
+  niftySpot:   null,
+  checkTimer:  null,
+  logLines:    [],
+};
+
+const STR_STOCKS = [
+  ['HDFCBANK',  'NSE_EQ|INE040A01034', 0.130],
+  ['RELIANCE',  'NSE_EQ|INE002A01018', 0.090],
+  ['ICICIBANK', 'NSE_EQ|INE090A01021', 0.080],
+  ['INFY',      'NSE_EQ|INE009A01021', 0.060],
+  ['TCS',       'NSE_EQ|INE467B01029', 0.050],
+  ['LT',        'NSE_EQ|INE018A01030', 0.040],
+  ['AXISBANK',  'NSE_EQ|INE238A01034', 0.040],
+  ['HINDUNILVR','NSE_EQ|INE030A01027', 0.030],
+  ['SBIN',      'NSE_EQ|INE062A01020', 0.030],
+];
+
+function strLog(msg, type='i') {
+  const ts  = new Date().toLocaleTimeString('en-IN');
+  const col = type==='s'?'var(--green)':type==='e'?'var(--red)':type==='w'?'var(--amber)':'var(--dim)';
+  STR.logLines.unshift(`<span style="color:${col}">[${ts}] ${msg}</span>`);
+  if (STR.logLines.length > 80) STR.logLines.pop();
+  const el = q('str-log');
+  if (el) el.innerHTML = STR.logLines.join('<br>');
+}
+
+function strMasterToggle(on) {
+  STR.active = on;
+  const track = q('str-toggle-track');
+  const knob  = q('str-toggle-knob');
+  const bar   = q('str-status-bar');
+  if (on) {
+    track.style.background = 'var(--green)'; track.style.border = 'none';
+    knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
+    bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
+      '⚡ Straddle engine ACTIVE — checking vol surge every minute from 09:20</div>';
+    strLog('Straddle engine activated', 's');
+    strScheduleNextCheck();
+  } else {
+    track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
+    knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
+    bar.innerHTML = '<div style="color:var(--dim);font-size:11px">Toggle ON to activate straddle engine</div>';
+    strLog('Straddle engine deactivated', 'w');
+    if (STR.checkTimer) { clearTimeout(STR.checkTimer); STR.checkTimer = null; }
+  }
+}
+
+function strScheduleNextCheck() {
+  if (!STR.active) return;
+  const now  = new Date();
+  const secs = now.getSeconds();
+  const ms   = now.getMilliseconds();
+  // Fire at second 50 of each minute
+  const msTo50 = ((50 - secs + 60) % 60) * 1000 - ms;
+  const wait   = msTo50 <= 0 ? msTo50 + 60000 : msTo50;
+  STR.checkTimer = setTimeout(async () => {
+    await strCheckSignal();
+    strScheduleNextCheck();   // reschedule
+  }, wait);
+}
+
+async function strCheckSignal() {
+  if (!STR.active) return;
+  if (STR.position) { strLog('Position open — skip signal check', 'i'); return; }
+
+  // Market hours 09:20 – 15:25
+  const ist  = new Date(Date.now() + 5.5*3600000);
+  const hhmm = ist.getUTCHours()*60 + ist.getUTCMinutes();
+  if (hhmm < 9*60+20 || hhmm > 15*60+25) return;
+
+  const min  = ist.getUTCMinutes();
+  const sec  = ist.getUTCSeconds();
+  strLog(`Signal check at ${ist.getUTCHours()}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`);
+
+  try {
+    // ── Fetch NIFTY spot ──────────────────────────────────────
+    const spotR = await fetch(engineUrl() + '/engine/straddle/spot');
+    const spotD = await spotR.json();
+    if (!spotD.ok) { strLog('Spot fetch failed: ' + spotD.error, 'e'); return; }
+    STR.niftySpot = spotD.spot;
+    const niftyRange = spotD.range;   // prev candle high-low range from engine
+    strLog(`NIFTY spot: ${STR.niftySpot} | prev range: ${niftyRange}pts`);
+
+    // ── Fetch stock volumes ───────────────────────────────────
+    const volR = await fetch(engineUrl() + '/engine/straddle/volcheck');
+    const volD = await volR.json();
+    if (!volD.ok) { strLog('Vol check failed: ' + volD.error, 'e'); return; }
+
+    const wVol = volD.weightedVolRatio;
+    strLog(`Weighted vol ratio: ${wVol.toFixed(2)}× | threshold: ${q('str-vol').value}×`);
+
+    const volThr = parseFloat(q('str-vol').value) || 2.0;
+    if (wVol < volThr) {
+      strLog(`Vol ${wVol.toFixed(2)} < ${volThr} — no signal`, 'i');
+      return;
+    }
+
+    strLog(`✅ VOL SURGE CONFIRMED: ${wVol.toFixed(2)}× — arming straddle!`, 's');
+
+    // ── Schedule entry at next minute open (second 0) ─────────
+    const msToNextMin = (60 - sec) * 1000 - ist.getUTCMilliseconds();
+    setTimeout(() => strEnterStraddle(), msToNextMin + 100);
+    strLog(`Entry scheduled in ${((msToNextMin+100)/1000).toFixed(1)}s`, 'w');
+
+  } catch(e) {
+    strLog('Signal check error: ' + e.message, 'e');
+  }
+}
+
+async function strEnterStraddle() {
+  if (!STR.active || STR.position) return;
+
+  try {
+    strLog('Placing straddle...', 'w');
+    const lots = parseInt(q('str-lots').value) || 6;
+    const tp   = parseFloat(q('str-tp').value) || 6;
+    const sl   = parseFloat(q('str-sl').value) || 3;
+
+    const autoLots   = q('str-autolots')?.checked !== false;
+    const deployPct  = parseFloat(q('str-deploy')?.value) || 85;
+    const floorPrem  = parseFloat(q('str-floor')?.value)  || 100;
+
+    const r = await fetch(engineUrl() + '/engine/straddle/enter', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ lots, tp, sl, autoLots, deployPct, floorPremium: floorPrem }),
+    });
+    const d = await r.json();
+    if (!d.ok) { strLog('Entry failed: ' + d.error, 'e'); return; }
+
+    const actualLots = d.lots || lots;  // engine returns calculated lots
+    STR.position = {
+      ceKey:    d.ceKey,    peKey:    d.peKey,
+      entrySpot:d.spot,     entryTime: new Date().toLocaleTimeString('en-IN'),
+      lots: actualLots, tp, sl,
+      ceLtp: d.ceLtp,   peLtp: d.peLtp,
+      ceOrderId:d.ceOrderId, peOrderId:d.peOrderId,
+      ceClosed: false,      peClosed:  false,
+    };
+
+    strLog(`✅ CE ${d.ceStrike} + PE ${d.peStrike} × ${d.lots||lots} lots @ spot ${d.spot} | CE₹${d.ceLtp} PE₹${d.peLtp}`, 's');
+    strLog(`TP at spot ±${tp}pts | SL at spot ±${sl}pts`, 'i');
+
+    strUpdatePositionUI();
+    strStartMonitor();
+
+    // Auto time-exit at second 57 of this minute + 1
+    const ist   = new Date(Date.now() + 5.5*3600000);
+    const msOut = (60 - ist.getUTCSeconds() + 57) % 60 * 1000 + 60000;
+    setTimeout(() => strTimeExit(), msOut);
+    strLog(`Time exit in ${(msOut/1000).toFixed(0)}s`, 'i');
+
+  } catch(e) {
+    strLog('Entry error: ' + e.message, 'e');
+  }
+}
+
+function strStartMonitor() {
+  if (STR.monTimer) clearInterval(STR.monTimer);
+  // Check every 500ms for TP/SL
+  STR.monTimer = setInterval(async () => {
+    if (!STR.position) { clearInterval(STR.monTimer); return; }
+    if (STR.position.ceClosed && STR.position.peClosed) {
+      clearInterval(STR.monTimer); strClosePosition(); return;
+    }
+    try {
+      const r = await fetch(engineUrl() + '/engine/straddle/spot');
+      const d = await r.json();
+      if (!d.ok) return;
+      const spot   = d.spot;
+      const entry  = STR.position.entrySpot;
+      const upMove = spot - entry;
+      const dnMove = entry - spot;
+      const tp     = STR.position.tp;
+      const sl     = STR.position.sl;
+
+      strUpdatePositionUI(spot);
+
+      // CE leg
+      if (!STR.position.ceClosed) {
+        if (upMove >= tp) {
+          strLog(`🎯 CE TP hit! Spot=${spot} (+${upMove.toFixed(1)}pts)`, 's');
+          await strCloseLeg('CE');
+        } else if (dnMove >= sl) {
+          strLog(`⛔ CE SL hit! Spot=${spot} (-${dnMove.toFixed(1)}pts)`, 'e');
+          await strCloseLeg('CE');
+        }
+      }
+      // PE leg
+      if (!STR.position.peClosed) {
+        if (dnMove >= tp) {
+          strLog(`🎯 PE TP hit! Spot=${spot} (-${dnMove.toFixed(1)}pts)`, 's');
+          await strCloseLeg('PE');
+        } else if (upMove >= sl) {
+          strLog(`⛔ PE SL hit! Spot=${spot} (+${upMove.toFixed(1)}pts)`, 'e');
+          await strCloseLeg('PE');
+        }
+      }
+    } catch(e) {}
+  }, 500);
+}
+
+async function strCloseLeg(leg) {
+  if (!STR.position) return;
+  const key    = leg === 'CE' ? STR.position.ceKey : STR.position.peKey;
+  const orderId= leg === 'CE' ? STR.position.ceOrderId : STR.position.peOrderId;
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/close-leg', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ leg, instrKey: key, lots: STR.position.lots }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      if (leg === 'CE') STR.position.ceClosed = true;
+      else              STR.position.peClosed  = true;
+      strLog(`${leg} closed @ ₹${d.fillPrice || 'mkt'}`, 's');
+    }
+  } catch(e) { strLog(`${leg} close error: ${e.message}`, 'e'); }
+}
+
+async function strTimeExit() {
+  if (!STR.position) return;
+  strLog('⏱ Time exit — closing any open legs at market', 'w');
+  if (!STR.position.ceClosed) await strCloseLeg('CE');
+  if (!STR.position.peClosed) await strCloseLeg('PE');
+  setTimeout(() => strClosePosition(), 2000);
+}
+
+async function strManualExit() {
+  strLog('Manual exit triggered', 'w');
+  await strTimeExit();
+}
+
+function strClosePosition() {
+  if (!STR.position) return;
+  const p      = STR.position;
+  const trade  = {
+    time: p.entryTime, spot: p.entrySpot,
+    lots: p.lots, tp: p.tp, sl: p.sl,
+    ceKey: p.ceKey, peKey: p.peKey,
+    closeTime: new Date().toLocaleTimeString('en-IN'),
+  };
+  STR.trades.unshift(trade);
+  STR.position = null;
+  if (STR.monTimer) { clearInterval(STR.monTimer); STR.monTimer = null; }
+  strUpdatePositionUI();
+  strRenderTrades();
+  strLog(`Position closed. Total trades today: ${STR.trades.length}`, 's');
+}
+
+function strUpdatePositionUI(liveSpot) {
+  const posDiv = q('str-position');
+  const detail = q('str-pos-detail');
+  if (!STR.position) { if(posDiv) posDiv.style.display='none'; return; }
+  if(posDiv) posDiv.style.display='block';
+  const p = STR.position;
+  const move = liveSpot ? (liveSpot - p.entrySpot).toFixed(1) : '—';
+  const col  = liveSpot && liveSpot > p.entrySpot ? 'var(--green)' : 'var(--red)';
+  if(detail) detail.innerHTML = `
+    <div>Entry spot: <b>${p.entrySpot}</b> | Live: <b style="color:${col}">${liveSpot||'...'}</b> | Move: <b style="color:${col}">${move>0?'+':''}${move}pts</b></div>
+    <div>CE: ${p.ceClosed?'<span style="color:var(--green)">CLOSED</span>':'<span style="color:var(--amber)">OPEN</span>'} | PE: ${p.peClosed?'<span style="color:var(--green)">CLOSED</span>':'<span style="color:var(--amber)">OPEN</span>'}</div>
+    <div>TP: +${p.tp}pts | SL: -${p.sl}pts | Lots: ${p.lots} | Entry: ${p.entryTime}</div>`;
+}
+
+function strRenderTrades() {
+  const el = q('str-trades');
+  if (!el) return;
+  if (!STR.trades.length) { el.innerHTML='<div style="color:var(--dim);font-size:11px;text-align:center;padding:16px">No trades yet today</div>'; return; }
+  const hdr = q('str-trades-header');
+  if(hdr) hdr.textContent = `TODAY'S TRADES (${STR.trades.length})`;
+  el.innerHTML = STR.trades.map((t,i) => `
+    <div style="background:var(--s2);border:1px solid var(--bdr);border-radius:6px;
+         padding:8px 10px;margin-bottom:5px;font-size:11px">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-weight:600">#${STR.trades.length-i} · ${t.time}</span>
+        <span style="color:var(--dim)">${t.lots} lots | TP${t.tp}/SL${t.sl}</span>
+      </div>
+      <div style="color:var(--dim);margin-top:2px">Entry spot: ${t.entrySpot} | Exit: ${t.closeTime}</div>
+    </div>`).join('');
+}
+
+// hook into go() for straddle tab
+const _origGo = go;
 
 // ── Sub-tab switcher ─────────────────────────────────────────
 let _liveTestTimer = null;

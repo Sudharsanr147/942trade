@@ -854,6 +854,11 @@ function clearAllSlotTimers() {
 // Schedule a single slot
 function scheduleSlot(slot) {
   if (!slot.enabled) return;
+  // Check if SR system is active (can be deactivated from app)
+  if (ST.srActive === false) {
+    lg(`[Auto] SR system deactivated — "${slot.name}" not scheduled`, 'w');
+    return;
+  }
 
   // Don't re-schedule a slot that already placed or errored this session
   const existingStatus = SLOT_STATUS[slot.id];
@@ -1019,6 +1024,133 @@ const server = http.createServer(async (req, res) => {
   const ok  = (d, code = 200) => { res.writeHead(code, { ...CORS, 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p   = url.pathname;
+
+  // ── POST /engine/sr-active ──────────────────────────────
+  if (p === '/engine/sr-active' && req.method === 'POST') {
+    ST.srActive = (body.active !== false);
+    lg(`SR system ${ST.srActive ? 'ACTIVATED ✅' : 'DEACTIVATED ⛔'}`, ST.srActive ? 's' : 'w');
+    return ok({ ok: true, srActive: ST.srActive });
+  }
+
+  // ── GET /engine/straddle/spot ────────────────────────────
+  if (p === '/engine/straddle/spot' && req.method === 'GET') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    try {
+      const d = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+      const spot = parseFloat(Object.values(d?.data||{})[0]?.last_price);
+      if (!spot) return ok({ ok: false, error: 'Spot unavailable' });
+      const cd = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute');
+      const candles = cd?.data?.candles || [];
+      let range = 0;
+      if (candles.length >= 2) {
+        const prev = candles[candles.length - 2];
+        range = parseFloat((prev[2] - prev[3]).toFixed(2));
+      }
+      return ok({ ok: true, spot, range });
+    } catch(e) { return ok({ ok: false, error: e.message }); }
+  }
+
+  // ── GET /engine/straddle/volcheck ───────────────────────
+  if (p === '/engine/straddle/volcheck' && req.method === 'GET') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    try {
+      const STOCKS = [
+        ['HDFCBANK',   'NSE_EQ%7CINE040A01034', 0.130],
+        ['RELIANCE',   'NSE_EQ%7CINE002A01018', 0.090],
+        ['ICICIBANK',  'NSE_EQ%7CINE090A01021', 0.080],
+        ['INFY',       'NSE_EQ%7CINE009A01021', 0.060],
+        ['TCS',        'NSE_EQ%7CINE467B01029', 0.050],
+        ['LT',         'NSE_EQ%7CINE018A01030', 0.040],
+        ['AXISBANK',   'NSE_EQ%7CINE238A01034', 0.040],
+        ['HINDUNILVR', 'NSE_EQ%7CINE030A01027', 0.030],
+        ['SBIN',       'NSE_EQ%7CINE062A01020', 0.030],
+      ];
+      const ROLL = 120;
+      let wVol = 0, totalW = 0;
+      const details = [];
+      for (const [sym, key, w] of STOCKS) {
+        try {
+          const cd = await upstox(`/v2/historical-candle/intraday/${key}/1minute`);
+          const candles = (cd?.data?.candles || []).reverse();
+          if (candles.length < 2) continue;
+          const curVol = parseFloat(candles[candles.length-1][5]) || 0;
+          const prior  = candles.slice(Math.max(0, candles.length-1-ROLL), candles.length-1);
+          const avgVol = prior.length > 0
+            ? prior.reduce((s,c) => s + (parseFloat(c[5])||0), 0) / prior.length : 0;
+          const ratio  = avgVol > 0 ? curVol / avgVol : 1;
+          wVol   += ratio * w;
+          totalW += w;
+          details.push({ sym, ratio: ratio.toFixed(2) });
+          await sleep(150);
+        } catch(_) {}
+      }
+      const wvr = totalW > 0 ? wVol / totalW : 0;
+      return ok({ ok: true, weightedVolRatio: parseFloat(wvr.toFixed(3)), details });
+    } catch(e) { return ok({ ok: false, error: e.message }); }
+  }
+
+  // ── POST /engine/straddle/enter ─────────────────────────
+  if (p === '/engine/straddle/enter' && req.method === 'POST') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    const { lots=6, tp=6, sl=3, autoLots=true, deployPct=85, floorPremium=100 } = body;
+    try {
+      const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+      const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+      if (!spot) return ok({ ok: false, error: 'Spot unavailable' });
+      const atm    = Math.round(spot / 50) * 50;
+      const expiry = await getLiveExpiry('NF');
+      const ce     = await findInstrument(expiry, atm, 'CE', 'NF');
+      const pe     = await findInstrument(expiry, atm, 'PE', 'NF');
+
+      // ── AUTO LOTS (same logic as SR system) ────────────────
+      let calcLots = lots;  // fallback to manual
+      if (autoLots) {
+        try {
+          const funds       = await getAvailableFunds();
+          const deployable  = funds * deployPct / 100;
+          // Straddle cost = CE premium + PE premium per lot
+          const ceLtp       = ce.ltp || 0;
+          const peLtp       = pe.ltp || 0;
+          // Use floor premium if actual is below (protects against zero/stale LTP)
+          const effCe       = (floorPremium > 0 && ceLtp < floorPremium) ? floorPremium : ceLtp;
+          const effPe       = (floorPremium > 0 && peLtp < floorPremium) ? floorPremium : peLtp;
+          const costPerLot  = (effCe + effPe) * 65;  // CE+PE per lot (65 shares)
+          if (costPerLot > 0) {
+            calcLots = Math.max(1, Math.floor(deployable / costPerLot));
+            lg(`💰 Straddle auto-lots: Balance ₹${funds.toFixed(0)} | ${deployPct}% = ₹${deployable.toFixed(0)}`, 's');
+            lg(`💰 CE LTP ₹${effCe} + PE LTP ₹${effPe} = ₹${costPerLot.toFixed(0)}/lot → ${calcLots} lot(s)`, 's');
+          }
+        } catch(e) {
+          lg(`⚠️ Straddle auto-lots failed: ${e.message} — using ${lots} lot(s)`, 'w');
+          calcLots = lots;
+        }
+      } else {
+        lg(`💰 Manual lots: ${calcLots}`, 'i');
+      }
+
+      const qty    = calcLots * 65;
+      const ceOid  = await placeMarket(ce.key, 'BUY', qty, 'D', 65);
+      await sleep(300);
+      const peOid  = await placeMarket(pe.key, 'BUY', qty, 'D', 65);
+      lg(`📐 STRADDLE: ${atm}CE + ${atm}PE × ${calcLots}lots @ spot=${spot} | TP=${tp}pt SL=${sl}pt`, 's');
+      return ok({ ok:true, spot, ceStrike:atm, peStrike:atm,
+        ceKey:ce.key, peKey:pe.key, ceOrderId:ceOid, peOrderId:peOid,
+        expiry, lots:calcLots, ceLtp:ce.ltp, peLtp:pe.ltp });
+    } catch(e) { lg('Straddle entry: '+e.message,'e'); return ok({ok:false,error:e.message}); }
+  }
+
+  // ── POST /engine/straddle/close-leg ─────────────────────
+  if (p === '/engine/straddle/close-leg' && req.method === 'POST') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    const { leg, instrKey, lots=6 } = body;
+    try {
+      const qty  = lots * 65;
+      const oid  = await placeMarket(instrKey, 'SELL', qty, 'D', 65);
+      const fill = await waitFill(oid);
+      lg(`📐 Straddle ${leg} CLOSED: fill=${fill}`, 's');
+      return ok({ ok: true, leg, orderId: oid, fillPrice: fill });
+    } catch(e) { return ok({ ok: false, error: e.message }); }
+  }
 
   // ── GET /engine/token ───────────────────────────────────
   // Returns current token (for use in download scripts)
