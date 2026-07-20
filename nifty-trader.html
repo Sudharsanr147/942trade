@@ -373,7 +373,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.9 · 20-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v6.1 · 20-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -1159,7 +1159,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 // ── Straddle state — declared early so go() can safely reference it ──
 let STR = {
   active:false, timer:null, monTimer:null, checkTimer:null,
-  position:null, trades:[], logLines:[], niftySpot:null, volHistory:{},
+  pollTimer:null, position:null, trades:[], logLines:[], niftySpot:null, volHistory:{},
 };
 const STR_STOCKS = [
   ['HDFCBANK',  'NSE_EQ|INE040A01034', 0.130],
@@ -4868,17 +4868,69 @@ function strMasterToggle(on) {
     track.style.background = 'var(--green)'; track.style.border = 'none';
     knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
     bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
-      '⚡ Straddle engine ACTIVE — checking vol surge every minute from 09:20</div>';
-    strLog('Straddle engine activated', 's');
-    strScheduleNextCheck();
+      '⚡ Starting straddle engine on VM...</div>';
+    // Start VM-side straddle engine
+    const params = {
+      tp:           parseFloat(q('str-tp')?.value)     || 6,
+      sl:           parseFloat(q('str-sl')?.value)     || 3,
+      volThr:       parseFloat(q('str-vol')?.value)    || 2.0,
+      lots:         parseInt(q('str-lots')?.value)     || 6,
+      autoLots:     q('str-autolots')?.checked !== false,
+      deployPct:    parseFloat(q('str-deploy')?.value) || 85,
+      floorPremium: parseFloat(q('str-floor')?.value)  || 100,
+    };
+    fetch(engineUrl() + '/engine/straddle/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
+          '⚡ Straddle engine ACTIVE on VM — checks every minute from 09:20<br>' +
+          '<span style="color:#aabbcc;font-weight:400">Works even if app is closed</span></div>';
+        strLog('✅ Straddle engine started on VM — independent of app', 's');
+      } else {
+        strLog('❌ VM start failed: ' + d.error, 'e');
+      }
+    }).catch(e => strLog('VM start error: ' + e.message, 'e'));
+    // Start VM status polling
+    if (STR.pollTimer) clearInterval(STR.pollTimer);
+    STR.pollTimer = setInterval(strPollStatus, 5000);
+    strPollStatus();
   } else {
     track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
     knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
-    bar.innerHTML = '<div style="color:var(--dim);font-size:11px">Toggle ON to activate straddle engine</div>';
-    strLog('Straddle engine deactivated', 'w');
-    if (STR.checkTimer) { clearTimeout(STR.checkTimer); STR.checkTimer = null; }
+    bar.innerHTML = '<div style="color:var(--dim);font-size:11px">Toggle ON to activate straddle engine on VM</div>';
+    // Stop VM-side straddle engine
+    fetch(engineUrl() + '/engine/straddle/stop', {method:'POST'})
+      .then(() => strLog('✅ Straddle engine stopped on VM. SR re-activated.', 's'))
+      .catch(() => {});
+    if (STR.pollTimer) { clearInterval(STR.pollTimer); STR.pollTimer = null; }
   }
 }
+
+// Poll VM for straddle status every 5s when active
+async function strPollStatus() {
+  if (!STR.active) return;
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/status');
+    const d = await r.json();
+    if (!d.ok) return;
+    // Update log
+    if (d.log && d.log.length) {
+      const el = q('str-log');
+      if (el) el.innerHTML = d.log.join('<br>');
+    }
+    // Update position
+    SE_position = d.position;
+    strUpdatePositionUI(d.position);
+    // Update trades
+    if (d.trades && d.trades.length) {
+      STR.trades = d.trades;
+      strRenderTrades();
+    }
+  } catch(_) {}
+}
+
 
 function strScheduleNextCheck() {
   if (!STR.active) return;

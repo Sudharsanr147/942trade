@@ -501,8 +501,256 @@ async function findInstrument(expiry, strike, type, inst) {
 }
 
 // ══════════════════════════════════════════════════════════
-// BALANCE (for auto-lots)
+// STRADDLE ENGINE — runs independently on VM
 // ══════════════════════════════════════════════════════════
+const SE = {
+  active:      false,   // master on/off
+  tp:          6,       // TP in spot pts
+  sl:          3,       // SL in spot pts
+  volThr:      2.0,     // vol surge threshold (× 120-min avg)
+  lots:        6,       // manual fallback lots
+  autoLots:    true,
+  deployPct:   85,
+  floorPrem:   100,
+  checkTimer:  null,    // setInterval for minute checks
+  monTimer:    null,    // setInterval for position monitor (500ms)
+  position:    null,    // active position {ceKey,peKey,entrySpot,ceClosed,peClosed,lots,tp,sl}
+  trades:      [],      // today's completed trades
+  log:         [],      // engine log lines
+};
+
+function seLg(msg, type='i') {
+  const ts  = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'});
+  const line = `[${ts}] ${msg}`;
+  SE.log.unshift(line);
+  if (SE.log.length > 100) SE.log.pop();
+  lg(`[Straddle] ${msg}`, type);
+}
+
+function seIsMarket() {
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  return hhmm >= 9 * 60 + 20 && hhmm <= 15 * 60 + 25;
+}
+
+function seStart(params = {}) {
+  if (SE.active) { seLg('Already active', 'w'); return; }
+  Object.assign(SE, {
+    active: true,
+    tp:        params.tp        || SE.tp,
+    sl:        params.sl        || SE.sl,
+    volThr:    params.volThr    || SE.volThr,
+    lots:      params.lots      || SE.lots,
+    autoLots:  params.autoLots  !== undefined ? params.autoLots : SE.autoLots,
+    deployPct: params.deployPct || SE.deployPct,
+    floorPrem: params.floorPrem || SE.floorPrem,
+  });
+  seLg(`Straddle engine started — TP=${SE.tp}pt SL=${SE.sl}pt Vol≥${SE.volThr}×`, 's');
+  seScheduleNextCheck();
+}
+
+function seStop() {
+  SE.active = false;
+  if (SE.checkTimer) { clearTimeout(SE.checkTimer); SE.checkTimer = null; }
+  if (SE.monTimer)   { clearInterval(SE.monTimer);  SE.monTimer   = null; }
+  seLg('Straddle engine stopped', 'w');
+}
+
+function seScheduleNextCheck() {
+  if (!SE.active) return;
+  // Fire at second 50 of each minute
+  const now  = new Date();
+  const secs = now.getSeconds();
+  const ms   = now.getMilliseconds();
+  const msTo50 = secs < 50
+    ? (50 - secs) * 1000 - ms
+    : (60 - secs + 50) * 1000 - ms;
+  SE.checkTimer = setTimeout(async () => {
+    if (SE.active) {
+      await seCheck();
+      seScheduleNextCheck();
+    }
+  }, msTo50);
+}
+
+async function seCheck() {
+  if (!SE.active || SE.position) return;
+  if (!ST.token) { seLg('No token — skip', 'w'); return; }
+  if (!seIsMarket()) { seLg('Outside market hours', 'i'); return; }
+
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = `${ist.getUTCHours()}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+  seLg(`Signal check at ${hhmm}`);
+
+  try {
+    // 1. Get NIFTY spot + prev candle range
+    const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+    if (!spot) { seLg('Spot unavailable', 'w'); return; }
+    seLg(`NIFTY spot: ${spot}`);
+
+    // 2. Get weighted vol ratio across 9 stocks
+    const STOCKS = [
+      ['HDFCBANK',   'NSE_EQ%7CINE040A01034', 0.130],
+      ['RELIANCE',   'NSE_EQ%7CINE002A01018', 0.090],
+      ['ICICIBANK',  'NSE_EQ%7CINE090A01021', 0.080],
+      ['INFY',       'NSE_EQ%7CINE009A01021', 0.060],
+      ['TCS',        'NSE_EQ%7CINE467B01029', 0.050],
+      ['LT',         'NSE_EQ%7CINE018A01030', 0.040],
+      ['AXISBANK',   'NSE_EQ%7CINE238A01034', 0.040],
+      ['HINDUNILVR', 'NSE_EQ%7CINE030A01027', 0.030],
+      ['SBIN',       'NSE_EQ%7CINE062A01020', 0.030],
+    ];
+    let wVol = 0, totalW = 0;
+    for (const [sym, key, w] of STOCKS) {
+      try {
+        const cd = await upstox(`/v2/historical-candle/intraday/${key}/1minute`);
+        const candles = (cd?.data?.candles || []).reverse();
+        if (candles.length < 2) continue;
+        const curVol = parseFloat(candles[candles.length-1][5]) || 0;
+        const prior  = candles.slice(Math.max(0, candles.length-121), candles.length-1);
+        const avgVol = prior.length > 0
+          ? prior.reduce((s,c) => s + (parseFloat(c[5])||0), 0) / prior.length : 0;
+        const ratio  = avgVol > 0 ? curVol / avgVol : 1;
+        wVol += ratio * w; totalW += w;
+        await sleep(120); // rate limit
+      } catch(_) {}
+    }
+    const wvr = totalW > 0 ? wVol / totalW : 0;
+    seLg(`Weighted vol ratio: ${wvr.toFixed(2)}× | threshold: ${SE.volThr}×`);
+
+    if (wvr < SE.volThr) { seLg(`Vol ${wvr.toFixed(2)} < ${SE.volThr} — no signal`); return; }
+    seLg(`✅ VOL SURGE: ${wvr.toFixed(2)}× — entering straddle at next minute open!`, 's');
+
+    // 3. Schedule entry at next minute open (~second 0)
+    const now2 = new Date();
+    const msToNext = (60 - now2.getSeconds()) * 1000 - now2.getMilliseconds() + 200;
+    setTimeout(() => seEnter(spot), msToNext);
+    seLg(`Entry in ${(msToNext/1000).toFixed(1)}s`, 'i');
+
+  } catch(e) { seLg('Check error: ' + e.message, 'e'); }
+}
+
+async function seEnter(signalSpot) {
+  if (!SE.active || SE.position) return;
+  try {
+    seLg('Placing straddle...', 'w');
+    // Fresh spot at entry
+    const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price) || signalSpot;
+    const atm  = Math.round(spot / 50) * 50;
+
+    // Auto-lots
+    let calcLots = SE.lots;
+    if (SE.autoLots) {
+      try {
+        const funds      = await getAvailableFunds();
+        const deployable = funds * SE.deployPct / 100;
+        const expiry2    = await getLiveExpiry('NF');
+        const ce2        = await findInstrument(expiry2, atm, 'CE', 'NF');
+        const pe2        = await findInstrument(expiry2, atm, 'PE', 'NF');
+        const effCe      = (SE.floorPrem > 0 && ce2.ltp < SE.floorPrem) ? SE.floorPrem : ce2.ltp;
+        const effPe      = (SE.floorPrem > 0 && pe2.ltp < SE.floorPrem) ? SE.floorPrem : pe2.ltp;
+        const costPerLot = (effCe + effPe) * 65;
+        if (costPerLot > 0) {
+          calcLots = Math.max(1, Math.floor(deployable / costPerLot));
+          seLg(`💰 Balance ₹${funds.toFixed(0)} | ${SE.deployPct}% → ₹${deployable.toFixed(0)} | cost/lot ₹${costPerLot.toFixed(0)} → ${calcLots} lots`, 's');
+        }
+      } catch(e) { seLg('Auto-lots failed: ' + e.message + ' — using ' + calcLots, 'w'); }
+    }
+
+    const expiry = await getLiveExpiry('NF');
+    const ce     = await findInstrument(expiry, atm, 'CE', 'NF');
+    const pe     = await findInstrument(expiry, atm, 'PE', 'NF');
+    const qty    = calcLots * 65;
+
+    const ceOid = await placeMarket(ce.key, 'BUY', qty, 'D', 65);
+    await sleep(400);
+    const peOid = await placeMarket(pe.key, 'BUY', qty, 'D', 65);
+
+    SE.position = {
+      ceKey: ce.key, peKey: pe.key,
+      entrySpot: spot, entryTime: new Date().toISOString(),
+      lots: calcLots, tp: SE.tp, sl: SE.sl,
+      ceClosed: false, peClosed: false,
+      ceOid, peOid,
+    };
+    seLg(`✅ ENTERED: ${atm}CE + ${atm}PE × ${calcLots} lots @ spot ${spot}`, 's');
+    seLg(`TP: spot ±${SE.tp}pts | SL: spot ±${SE.sl}pts`, 'i');
+
+    // Start 500ms monitor
+    seStartMonitor();
+
+    // Time exit: second 57 of next minute
+    const now3 = new Date();
+    const msOut = (60 - now3.getSeconds() + 57) % 60 * 1000 + 60000 + 200;
+    setTimeout(() => seTimeExit(), msOut);
+    seLg(`Time exit in ${(msOut/1000).toFixed(0)}s`, 'i');
+
+  } catch(e) { seLg('Entry error: ' + e.message, 'e'); }
+}
+
+function seStartMonitor() {
+  if (SE.monTimer) clearInterval(SE.monTimer);
+  SE.monTimer = setInterval(async () => {
+    if (!SE.position) { clearInterval(SE.monTimer); SE.monTimer = null; return; }
+    if (SE.position.ceClosed && SE.position.peClosed) {
+      clearInterval(SE.monTimer); SE.monTimer = null;
+      seClosePosition(); return;
+    }
+    try {
+      const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+      const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+      if (!spot) return;
+      const entry  = SE.position.entrySpot;
+      const upMove = spot - entry;
+      const dnMove = entry - spot;
+      const tp = SE.position.tp, sl = SE.position.sl;
+      // CE leg
+      if (!SE.position.ceClosed) {
+        if (upMove >= tp) { seLg(`🎯 CE TP! spot=${spot} (+${upMove.toFixed(1)}pt)`, 's'); await seCloseLeg('CE'); }
+        else if (dnMove >= sl) { seLg(`⛔ CE SL! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 'e'); await seCloseLeg('CE'); }
+      }
+      // PE leg
+      if (!SE.position.peClosed) {
+        if (dnMove >= tp) { seLg(`🎯 PE TP! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 's'); await seCloseLeg('PE'); }
+        else if (upMove >= sl) { seLg(`⛔ PE SL! spot=${spot} (+${upMove.toFixed(1)}pt)`, 'e'); await seCloseLeg('PE'); }
+      }
+    } catch(_) {}
+  }, 500);
+}
+
+async function seCloseLeg(leg) {
+  if (!SE.position) return;
+  const key = leg === 'CE' ? SE.position.ceKey : SE.position.peKey;
+  try {
+    const qty = SE.position.lots * 65;
+    const oid = await placeMarket(key, 'SELL', qty, 'D', 65);
+    if (leg === 'CE') SE.position.ceClosed = true;
+    else              SE.position.peClosed  = true;
+    seLg(`${leg} closed: ${oid}`, 's');
+  } catch(e) { seLg(`${leg} close error: ${e.message}`, 'e'); }
+}
+
+async function seTimeExit() {
+  if (!SE.position) return;
+  seLg('⏱ Time exit — closing open legs', 'w');
+  if (!SE.position.ceClosed) await seCloseLeg('CE');
+  await sleep(400);
+  if (!SE.position.peClosed) await seCloseLeg('PE');
+  setTimeout(() => seClosePosition(), 1500);
+}
+
+function seClosePosition() {
+  if (!SE.position) return;
+  SE.trades.unshift({ ...SE.position, closeTime: new Date().toISOString() });
+  if (SE.trades.length > 50) SE.trades.pop();
+  SE.position = null;
+  if (SE.monTimer) { clearInterval(SE.monTimer); SE.monTimer = null; }
+  seLg(`Position closed. Trades today: ${SE.trades.length}`, 's');
+}
+
+
 async function getAvailableFunds() {
   for (const ep of ['/v2/user/get-funds-and-margin', '/v2/user/get-funds-and-margin?segment=SEC']) {
     try {
@@ -1030,6 +1278,52 @@ const server = http.createServer(async (req, res) => {
     ST.srActive = (body.active !== false);
     lg(`SR system ${ST.srActive ? 'ACTIVATED ✅' : 'DEACTIVATED ⛔'}`, ST.srActive ? 's' : 'w');
     return ok({ ok: true, srActive: ST.srActive });
+  }
+
+  // ── POST /engine/straddle/start ─────────────────────────
+  if (p === '/engine/straddle/start' && req.method === 'POST') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    seStart({
+      tp:        body.tp        || 6,
+      sl:        body.sl        || 3,
+      volThr:    body.volThr    || 2.0,
+      lots:      body.lots      || 6,
+      autoLots:  body.autoLots  !== undefined ? body.autoLots : true,
+      deployPct: body.deployPct || 85,
+      floorPrem: body.floorPremium || 100,
+    });
+    // Also deactivate SR
+    ST.srActive = false;
+    lg('SR deactivated — straddle engine started', 'w');
+    return ok({ ok: true, message: 'Straddle engine started on VM' });
+  }
+
+  // ── POST /engine/straddle/stop ──────────────────────────
+  if (p === '/engine/straddle/stop' && req.method === 'POST') {
+    seStop();
+    // Re-activate SR
+    ST.srActive = true;
+    lg('SR re-activated — straddle engine stopped', 's');
+    return ok({ ok: true, message: 'Straddle engine stopped' });
+  }
+
+  // ── GET /engine/straddle/status ─────────────────────────
+  if (p === '/engine/straddle/status' && req.method === 'GET') {
+    return ok({
+      ok: true,
+      active:   SE.active,
+      position: SE.position,
+      trades:   SE.trades.slice(0, 10),
+      log:      SE.log.slice(0, 30),
+      params:   { tp: SE.tp, sl: SE.sl, volThr: SE.volThr, lots: SE.lots,
+                  autoLots: SE.autoLots, deployPct: SE.deployPct },
+    });
+  }
+
+  // ── POST /engine/straddle/exit ──────────────────────────
+  if (p === '/engine/straddle/exit' && req.method === 'POST') {
+    await seTimeExit();
+    return ok({ ok: true, message: 'Manual exit triggered' });
   }
 
   // ── GET /engine/straddle/spot ────────────────────────────
