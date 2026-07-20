@@ -714,6 +714,7 @@ async function seCheck() {
       ['SBIN',       'NSE_EQ%7CINE062A01020', 0.030],
     ];
     let wVol = 0, totalW = 0;
+    const stockDetails = [];
     for (const [sym, key, w] of STOCKS) {
       try {
         const cd = await upstox(`/v2/historical-candle/intraday/${key}/1minute`);
@@ -725,6 +726,7 @@ async function seCheck() {
           ? prior.reduce((s,c) => s + (parseFloat(c[5])||0), 0) / prior.length : 0;
         const ratio  = avgVol > 0 ? curVol / avgVol : 1;
         wVol += ratio * w; totalW += w;
+        stockDetails.push(`${sym} ${ratio.toFixed(2)}×`);
         await sleep(120); // rate limit
       } catch(_) {}
     }
@@ -733,6 +735,7 @@ async function seCheck() {
 
     if (wvr < SE.volThr) { seLg(`Vol ${wvr.toFixed(2)} < ${SE.volThr} — no signal`); return; }
     seLg(`✅ VOL SURGE: ${wvr.toFixed(2)}× — entering straddle at next minute open!`, 's');
+    seLg(`   Per-stock: ${stockDetails.join(', ')}`, 'i');
 
     // 3. Schedule entry at next minute open (~second 0)
     const now2 = new Date();
@@ -741,6 +744,21 @@ async function seCheck() {
     seLg(`Entry in ${(msToNext/1000).toFixed(1)}s`, 'i');
 
   } catch(e) { seLg('Check error: ' + e.message, 'e'); }
+}
+
+// Patches a confirmed fill price wherever the order actually lives right
+// now — the live position, or (if it already closed by the time the fill
+// confirmation comes back) the archived trade in SE.trades. Decoupled from
+// timing on purpose: fill confirmation can take several seconds and must
+// never block entry/exit/monitoring.
+function seRecordFill(oid, field, price) {
+  if (price == null) return;
+  if (SE.position && (SE.position.ceOid === oid || SE.position.peOid === oid)) {
+    SE.position[field] = price;
+  }
+  const t = SE.trades.find(x => x.ceOid === oid || x.peOid === oid);
+  if (t) t[field] = price;
+  seSaveState();
 }
 
 async function seEnter(signalSpot) {
@@ -776,6 +794,8 @@ async function seEnter(signalSpot) {
     const pe     = await findInstrument(expiry, atm, 'PE', 'NF');
     const qty    = calcLots * 65;
 
+    seLg(`📐 Quoted premiums before order: CE ₹${ce.ltp} | PE ₹${pe.ltp}`, 'i');
+
     const ceOid = await placeMarket(ce.key, 'BUY', qty, 'D', 65);
     await sleep(400);
     const peOid = await placeMarket(pe.key, 'BUY', qty, 'D', 65);
@@ -793,9 +813,25 @@ async function seEnter(signalSpot) {
       lots: calcLots, tp: SE.tp, sl: SE.sl,
       ceClosed: false, peClosed: false,
       ceOid, peOid, exitDeadlineTs,
+      ceQuotedPrice: ce.ltp, peQuotedPrice: pe.ltp,   // pre-order LTP (indicative)
+      ceEntryPrice: null, peEntryPrice: null,         // filled in below once confirmed
+      ceExitPrice: null, peExitPrice: null,
     };
-    seLg(`✅ ENTERED: ${atm}CE + ${atm}PE × ${calcLots} lots @ spot ${spot}`, 's');
+    seLg(`✅ ENTERED: ${atm}CE (order ${ceOid}) + ${atm}PE (order ${peOid}) × ${calcLots} lots @ spot ${spot}`, 's');
     seLg(`TP: spot ±${SE.tp}pts | SL: spot ±${SE.sl}pts`, 'i');
+
+    // Confirm ACTUAL fill prices from the broker, in the background — this
+    // must not delay seStartMonitor()/the exit timer below, since the whole
+    // strategy depends on watching the position within milliseconds of entry.
+    (async () => {
+      const [ceFill, peFill] = await Promise.all([
+        waitFill(ceOid).catch(e => { seLg(`CE fill confirm failed: ${e.message}`, 'w'); return null; }),
+        waitFill(peOid).catch(e => { seLg(`PE fill confirm failed: ${e.message}`, 'w'); return null; }),
+      ]);
+      seRecordFill(ceOid, 'ceEntryPrice', ceFill);
+      seRecordFill(peOid, 'peEntryPrice', peFill);
+      seLg(`📋 Entry fills confirmed: CE ₹${ceFill ?? '?'} | PE ₹${peFill ?? '?'}`, 'i');
+    })();
 
     // Start 500ms monitor
     seStartMonitor();
@@ -884,7 +920,17 @@ async function seCloseLeg(leg, reason, closeSpot) {
       SE.position.pePnlRs     = pnlRs;
       SE.position.peCloseSpot = closeSpot;
     }
-    seLg(`${leg} closed (${reason||'TIME'}): ${oid} | P&L: ${optPnlPts > 0 ? '+' : ''}${optPnlPts.toFixed(2)} opt pts = ₹${pnlRs > 0 ? '+' : ''}${pnlRs.toFixed(0)}`, reason==='TP'?'s':'w');
+    seLg(`${leg} closed (${reason||'TIME'}): order ${oid} | P&L (est): ${optPnlPts > 0 ? '+' : ''}${optPnlPts.toFixed(2)} opt pts = ₹${pnlRs > 0 ? '+' : ''}${pnlRs.toFixed(0)}`, reason==='TP'?'s':'w');
+
+    // Confirm the ACTUAL sell fill price in the background — doesn't block
+    // seClosePosition()/the next scan, which must stay fast.
+    (async () => {
+      try {
+        const fill = await waitFill(oid);
+        seRecordFill(oid, leg === 'CE' ? 'ceExitPrice' : 'peExitPrice', fill);
+        seLg(`📋 ${leg} exit fill confirmed: ₹${fill}`, 'i');
+      } catch(e) { seLg(`${leg} exit fill confirm failed: ${e.message}`, 'w'); }
+    })();
   } catch(e) { seLg(`${leg} close error: ${e.message}`, 'e'); }
 }
 
@@ -1490,8 +1536,39 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // ── POST /engine/straddle/exit ──────────────────────────
-  // Closes only the CURRENT open position — engine keeps running/scanning after.
+  // ── GET /engine/straddle/report ─────────────────────────
+  // Plain-text version of the same data — readable straight in a terminal,
+  // no jq/python needed: curl -s http://localhost:8081/engine/straddle/report
+  if (p === '/engine/straddle/report' && req.method === 'GET') {
+    const lines = [];
+    lines.push(`942 Trade — Straddle report — ${SE.dateStr || seTodayStr()}`);
+    lines.push(`Active: ${SE.active} | Stopped by user today: ${SE.stoppedToday}`);
+    lines.push(`Params: TP=${SE.tp}pt SL=${SE.sl}pt Vol>=${SE.volThr}x Lots=${SE.lots}${SE.autoLots?' (auto)':''} Deploy=${SE.deployPct}% Floor=Rs${SE.floorPrem}`);
+    lines.push('');
+    if (SE.position) {
+      const p = SE.position;
+      lines.push(`OPEN POSITION: entry ${p.entryTime} | spot ${p.entrySpot} | ${p.lots} lots`);
+      lines.push(`  CE: quoted Rs${p.ceQuotedPrice ?? '?'} | entry fill Rs${p.ceEntryPrice ?? 'pending'} | ${p.ceClosed ? 'closed ('+p.ceReason+') exit Rs'+(p.ceExitPrice ?? 'pending') : 'still open'}`);
+      lines.push(`  PE: quoted Rs${p.peQuotedPrice ?? '?'} | entry fill Rs${p.peEntryPrice ?? 'pending'} | ${p.peClosed ? 'closed ('+p.peReason+') exit Rs'+(p.peExitPrice ?? 'pending') : 'still open'}`);
+      lines.push('');
+    }
+    lines.push(`=== TRADES (${SE.trades.length}) ===`);
+    if (!SE.trades.length) lines.push('(none yet today)');
+    SE.trades.slice().reverse().forEach((t, i) => {
+      lines.push(`#${i+1}  entry ${t.entryTime}  spot ${t.entrySpot}  ${t.lots} lots  ->  close ${t.closeTime || '?'}`);
+      lines.push(`  CE: quoted Rs${t.ceQuotedPrice ?? '?'} -> entry Rs${t.ceEntryPrice ?? '?'} -> exit Rs${t.ceExitPrice ?? '?'}  [${t.ceReason || '?'}]  est P&L Rs${(t.cePnlRs ?? 0).toFixed(0)}`);
+      lines.push(`  PE: quoted Rs${t.peQuotedPrice ?? '?'} -> entry Rs${t.peEntryPrice ?? '?'} -> exit Rs${t.peExitPrice ?? '?'}  [${t.peReason || '?'}]  est P&L Rs${(t.pePnlRs ?? 0).toFixed(0)}`);
+      lines.push(`  TOTAL (after Rs100 txcost): Rs${(t.totalPnlRs ?? 0).toFixed(0)}`);
+      lines.push('');
+    });
+    lines.push(`=== FULL LOG (${SE.log.length} lines, chronological) ===`);
+    SE.log.slice().reverse().forEach(l => lines.push(l));
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end(lines.join('\n'));
+    return;
+  }
+
+
   if (p === '/engine/straddle/exit' && req.method === 'POST') {
     if (!SE.position) return ok({ ok: false, error: 'No open position' });
     await seTimeExit();
