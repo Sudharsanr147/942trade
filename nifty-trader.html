@@ -74,6 +74,7 @@ html,body {
   flex:1; overflow-y:auto; overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
   min-height:0; /* critical for flex+overflow on Android WebView */
+  padding-bottom: 70px; /* space for fixed nav bar */
 }
 .tab { display:none; padding:16px; }
 .tab.on { display:block; }
@@ -372,7 +373,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.4 · 20-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.6 · 20-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -980,14 +981,14 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- STRADDLE TAB                                        -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div class="tab" id="t-straddle">
-
+    <div style="color:#ffffff;font-size:16px;font-weight:bold;padding:12px">⚡ STRADDLE ENGINE</div>
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div>
-        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#aabbcc">
           Straddle Engine
         </div>
-        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="str-subtitle">
+        <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="str-subtitle">
           Vol surge detector · buys CE+PE · 6 spot TP · 3 spot SL
         </div>
       </div>
@@ -996,7 +997,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         <input type="checkbox" id="str-master-toggle" onchange="strMasterToggle(this.checked)"
           style="opacity:0;width:0;height:0">
         <span id="str-toggle-track" style="position:absolute;top:0;left:0;right:0;bottom:0;
-          background:var(--s3);border:1px solid var(--bdr);border-radius:24px;transition:.3s">
+          background:#0f1923;border:1px solid #2a3f55;border-radius:24px;transition:.3s">
           <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;
             background:var(--dim);border-radius:50%;transition:.3s" id="str-toggle-knob"></span>
         </span>
@@ -1004,59 +1005,59 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
 
     <!-- Status bar -->
-    <div id="str-status-bar" style="background:var(--s2);border:1px solid var(--bdr);
+    <div id="str-status-bar" style="background:#1a2535;border:1px solid #2a3f55;
          border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px">
-      <div style="color:var(--dim)">Toggle ON to activate straddle engine</div>
+      <div style="color:#aabbcc">Toggle ON to activate straddle engine</div>
     </div>
 
     <!-- Params -->
-    <div style="background:var(--s2);border:1px solid var(--bdr);border-radius:8px;
+    <div style="background:#1a2535;border:1px solid #2a3f55;border-radius:8px;
          padding:10px 12px;margin-bottom:10px">
       <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
-           color:var(--dim);margin-bottom:8px">Parameters</div>
+           color:#aabbcc;margin-bottom:8px">Parameters</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
         <div>
-          <div style="color:var(--dim);margin-bottom:2px">TP (spot pts)</div>
+          <div style="color:#aabbcc;margin-bottom:2px">TP (spot pts)</div>
           <input id="str-tp" type="number" value="6" min="3" max="20" step="0.5"
-            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
-                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
-          <div style="color:var(--dim);margin-bottom:2px">SL (spot pts)</div>
+          <div style="color:#aabbcc;margin-bottom:2px">SL (spot pts)</div>
           <input id="str-sl" type="number" value="3" min="1" max="10" step="0.5"
-            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
-                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
-          <div style="color:var(--dim);margin-bottom:2px">Vol threshold (×avg)</div>
+          <div style="color:#aabbcc;margin-bottom:2px">Vol threshold (×avg)</div>
           <input id="str-vol" type="number" value="2" min="1.5" max="5" step="0.5"
-            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
-                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
-          <div style="color:var(--dim);margin-bottom:2px">Lots (manual fallback)</div>
+          <div style="color:#aabbcc;margin-bottom:2px">Lots (manual fallback)</div>
           <input id="str-lots" type="number" value="6" min="1" max="50" step="1"
-            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
-                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
-          <div style="color:var(--dim);margin-bottom:2px">Deploy % of balance</div>
+          <div style="color:#aabbcc;margin-bottom:2px">Deploy % of balance</div>
           <input id="str-deploy" type="number" value="85" min="50" max="95" step="5"
-            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
-                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
-          <div style="color:var(--dim);margin-bottom:2px">Floor premium (₹/share)</div>
+          <div style="color:#aabbcc;margin-bottom:2px">Floor premium (₹/share)</div>
           <input id="str-floor" type="number" value="100" min="0" max="500" step="10"
-            style="width:100%;background:var(--s3);border:1px solid var(--bdr);
-                   color:var(--c1);padding:5px 8px;border-radius:5px;font-size:12px">
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div style="grid-column:1/-1">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:var(--c1)">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#e0eaf5">
             <input type="checkbox" id="str-autolots" checked
-              style="width:16px;height:16px;accent-color:var(--green)">
+              style="width:16px;height:16px;accent-color:#00d478">
             <span>Auto-calculate lots from balance</span>
-            <span style="color:var(--dim);font-size:10px">(like SR system)</span>
+            <span style="color:#aabbcc;font-size:10px">(like SR system)</span>
           </label>
         </div>
       </div>
@@ -1066,31 +1067,31 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <div id="str-position" style="display:none;background:rgba(245,166,35,.08);
          border:1px solid rgba(245,166,35,.3);border-radius:8px;
          padding:10px 12px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:6px">
+      <div style="font-size:10px;font-weight:700;color:#f5a623;margin-bottom:6px">
         ⚡ LIVE STRADDLE POSITION
       </div>
-      <div id="str-pos-detail" style="font-size:11px;color:var(--c1);line-height:1.8"></div>
+      <div id="str-pos-detail" style="font-size:11px;color:#e0eaf5;line-height:1.8"></div>
       <button onclick="strManualExit()" style="margin-top:8px;width:100%;
         background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);
-        color:var(--red);padding:7px;border-radius:6px;font-size:12px;
+        color:#f85149;padding:7px;border-radius:6px;font-size:12px;
         font-weight:600;cursor:pointer">⛔ Manual Exit Both Legs</button>
     </div>
 
     <!-- Today's trades -->
     <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
-         color:var(--dim);margin-bottom:6px" id="str-trades-header">TODAY'S TRADES</div>
+         color:#aabbcc;margin-bottom:6px" id="str-trades-header">TODAY'S TRADES</div>
     <div id="str-trades" style="margin-bottom:10px">
-      <div style="color:var(--dim);font-size:11px;text-align:center;padding:16px">
+      <div style="color:#aabbcc;font-size:11px;text-align:center;padding:16px">
         No trades yet today
       </div>
     </div>
 
     <!-- Log -->
     <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
-         color:var(--dim);margin-bottom:4px">ENGINE LOG</div>
-    <div id="str-log" style="background:var(--s2);border:1px solid var(--bdr);
+         color:#aabbcc;margin-bottom:4px">ENGINE LOG</div>
+    <div id="str-log" style="background:#1a2535;border:1px solid #2a3f55;
          border-radius:6px;padding:8px;max-height:200px;overflow-y:auto;font-size:10px;
-         font-family:monospace;color:var(--dim);line-height:1.6">
+         font-family:monospace;color:#aabbcc;line-height:1.6">
       Waiting for activation...
     </div>
 
@@ -1994,17 +1995,17 @@ function go(tab) {
   if (tab === 'bt') {
     const testPanel = q('subtab-test');
     if (testPanel && testPanel.style.display !== 'none') {
-      // User returned to Replay tab with Live Test open — refresh immediately
       setTimeout(() => liveTestRun(), 100);
-      // Reset the countdown
       stopLiveTestTimer();
       startLiveTestTimer();
     }
   }
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
-  q('t-' + tab).classList.add('on');
-  q('nav-' + tab).classList.add('on');
+  const tabEl = document.getElementById('t-' + tab);
+  const navEl = document.getElementById('nav-' + tab);
+  if (tabEl) tabEl.classList.add('on');
+  if (navEl) navEl.classList.add('on');
 }
 
 function setMode(m) {
@@ -5104,9 +5105,6 @@ function strRenderTrades() {
       <div style="color:var(--dim);margin-top:2px">Entry spot: ${t.entrySpot} | Exit: ${t.closeTime}</div>
     </div>`).join('');
 }
-
-// hook into go() for straddle tab
-const _origGo = go;
 
 // ── Sub-tab switcher ─────────────────────────────────────────
 let _liveTestTimer = null;
