@@ -982,9 +982,6 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- STRADDLE TAB                                        -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div class="tab" id="t-straddle">
-    <div style="color:#ffffff;font-size:20px;font-weight:bold;padding:20px;background:#ff0000">
-      ✅ STRADDLE TAB LOADED — IF YOU SEE THIS IT IS WORKING
-    </div>
     <div style="color:#ffffff;font-size:16px;font-weight:bold;padding:12px">⚡ STRADDLE ENGINE</div>
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -993,7 +990,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           Straddle Engine
         </div>
         <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="str-subtitle">
-          Vol surge detector · buys CE+PE · 6 spot TP · 3 spot SL
+          Vol surge detector · buys CE+PE · always-on with your token, like SR
         </div>
       </div>
       <!-- Master ON/OFF -->
@@ -1034,7 +1031,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         </div>
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">Vol threshold (×avg)</div>
-          <input id="str-vol" type="number" value="2" min="1.5" max="5" step="0.5"
+          <input id="str-vol" type="number" value="1" min="0.5" max="5" step="0.5"
             style="width:100%;background:#0f1923;border:1px solid #2a3f55;
                    color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
@@ -1046,13 +1043,13 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
         </div>
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">Deploy % of balance</div>
-          <input id="str-deploy" type="number" value="85" min="50" max="95" step="5"
+          <input id="str-deploy" type="number" value="95" min="50" max="99" step="5"
             style="width:100%;background:#0f1923;border:1px solid #2a3f55;
                    color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">Floor premium (₹/share)</div>
-          <input id="str-floor" type="number" value="100" min="0" max="500" step="10"
+          <input id="str-floor" type="number" value="50" min="0" max="500" step="10"
             style="width:100%;background:#0f1923;border:1px solid #2a3f55;
                    color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
@@ -1065,6 +1062,12 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           </label>
         </div>
       </div>
+      <button onclick="strUpdateDefaults()" style="width:100%;margin-top:10px;padding:9px;
+        background:rgba(30,144,255,.12);border:1px solid rgba(30,144,255,.35);color:#79c0ff;
+        border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        ↺ Update Defaults — use these values every day from now on
+      </button>
+      <div id="str-defaults-status" style="font-size:10px;color:#aabbcc;margin-top:6px;text-align:center"></div>
     </div>
 
     <!-- Live position -->
@@ -1138,6 +1141,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('on')});
   document.getElementById('t-straddle').classList.add('on');
   document.getElementById('nav-straddle').classList.add('on');
+  if (typeof strSyncFromEngine === 'function') strSyncFromEngine();
 ">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
@@ -2390,6 +2394,16 @@ function init() {
   if (ST.dir) setDir(ST.dir);
   if (ST.autoLots) setAutoLots(true);
   if (ST.accessToken) setConn(true);
+
+  // Sync Straddle + SR toggle UI and param fields from the VM's real state —
+  // independent of whether a fresh token gets pushed this load. The engine
+  // itself now survives restarts and stays on across app open/close, so the
+  // app just needs to reflect reality rather than assume a default.
+  if (ST.workerUrl) {
+    strFetchDefaults();
+    strSyncFromEngine();
+    srSyncFromEngine();
+  }
 
   // ── Restore active trade if app restarted mid-trade ──────────
   const activeStatuses = ['live', 'sl_hit', 'tgt_hit', 'placed'];
@@ -4823,30 +4837,44 @@ async function btDownloadCandles(dateStr) {
 
 
 // ── SR Master Toggle ─────────────────────────────────────────
-function srMasterToggle(on) {
+function srSetToggleUI(active) {
   const track  = q('sr-toggle-track');
   const knob   = q('sr-toggle-knob');
   const status = q('sr-master-status');
-  if (on) {
+  const cb     = q('sr-master-toggle');
+  if (!track || !knob || !status) return;
+  if (cb) cb.checked = !!active;
+  if (active) {
     track.style.background  = 'var(--green)';
     knob.style.transform    = 'translateX(20px)';
     knob.style.background   = '#fff';
     status.style.color      = 'var(--green)';
     status.textContent      = '✅ Active — engine will run all SR slots today';
-    // Tell engine to enable SR
-    fetch(engineUrl() + '/engine/sr-active', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({active: true})}).catch(()=>{});
   } else {
     track.style.background  = 'var(--red)';
     knob.style.transform    = 'translateX(0)';
     knob.style.background   = '#fff';
     status.style.color      = 'var(--red)';
     status.textContent      = '⛔ SR Deactivated — slots will not fire today';
-    fetch(engineUrl() + '/engine/sr-active', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({active: false})}).catch(()=>{});
   }
+}
+
+function srMasterToggle(on) {
+  srSetToggleUI(on);
+  fetch(engineUrl() + '/engine/sr-active', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({active: on})}).catch(()=>{});
+}
+
+// SR and Straddle are mutually exclusive server-side — straddle auto-starting
+// flips SR off without the user touching this toggle. Pull the real state so
+// it doesn't go stale.
+async function srSyncFromEngine() {
+  try {
+    const r = await fetch(engineUrl() + '/engine/slots/status');
+    const d = await r.json();
+    if (d.ok && typeof d.srActive === 'boolean') srSetToggleUI(d.srActive);
+  } catch(_) {}
 }
 
 // ── Straddle Engine ───────────────────────────────────────────
@@ -4859,281 +4887,154 @@ function strLog(msg, type='i') {
   if (el) el.innerHTML = STR.logLines.join('<br>');
 }
 
-function strMasterToggle(on) {
-  STR.active = on;
+// Reads a numeric field, falling back to `def` only if missing/blank/NaN —
+// not just falsy — so an intentional 0 (e.g. floor premium disabled) is
+// respected instead of silently overridden.
+function strNum(id, def) {
+  const n = parseFloat(q(id)?.value);
+  return Number.isFinite(n) ? n : def;
+}
+
+function strSetToggleUI(active, stoppedToday) {
   const track = q('str-toggle-track');
   const knob  = q('str-toggle-knob');
   const bar   = q('str-status-bar');
-  if (on) {
+  const cb    = q('str-master-toggle');
+  if (!track || !knob || !bar) return;
+  if (cb) cb.checked = !!active;
+  if (active) {
     track.style.background = 'var(--green)'; track.style.border = 'none';
     knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
     bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
-      '⚡ Starting straddle engine on VM...</div>';
-    // Start VM-side straddle engine
+      '⚡ Active on VM — checks every minute from 09:20<br>' +
+      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Resumes automatically tomorrow.</span></div>';
+  } else {
+    track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
+    knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
+    bar.innerHTML = stoppedToday
+      ? '<div style="color:var(--amber);font-size:11px">⛔ Stopped for today — resumes automatically tomorrow on login. Toggle ON to resume now.</div>'
+      : '<div style="color:var(--dim);font-size:11px">Toggle ON to activate — or just log in tomorrow, it starts itself.</div>';
+  }
+}
+
+function strMasterToggle(on) {
+  strSetToggleUI(on);
+  if (on) {
     const params = {
-      tp:           parseFloat(q('str-tp')?.value)     || 6,
-      sl:           parseFloat(q('str-sl')?.value)     || 3,
-      volThr:       parseFloat(q('str-vol')?.value)    || 2.0,
-      lots:         parseInt(q('str-lots')?.value)     || 6,
-      autoLots:     q('str-autolots')?.checked !== false,
-      deployPct:    parseFloat(q('str-deploy')?.value) || 85,
-      floorPremium: parseFloat(q('str-floor')?.value)  || 100,
+      tp: strNum('str-tp', 6), sl: strNum('str-sl', 3), volThr: strNum('str-vol', 1),
+      lots: parseInt(q('str-lots')?.value) || 6,
+      autoLots: q('str-autolots')?.checked !== false,
+      deployPct: strNum('str-deploy', 95), floorPremium: strNum('str-floor', 50),
     };
     fetch(engineUrl() + '/engine/straddle/start', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(params)
     }).then(r => r.json()).then(d => {
-      if (d.ok) {
-        bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
-          '⚡ Straddle engine ACTIVE on VM — checks every minute from 09:20<br>' +
-          '<span style="color:#aabbcc;font-weight:400">Works even if app is closed</span></div>';
-        strLog('✅ Straddle engine started on VM — independent of app', 's');
-      } else {
-        strLog('❌ VM start failed: ' + d.error, 'e');
-      }
+      if (d.ok) strLog('✅ Straddle engine active on VM — independent of app', 's');
+      else strLog('❌ VM start failed: ' + d.error, 'e');
+      strSyncFromEngine();
     }).catch(e => strLog('VM start error: ' + e.message, 'e'));
-    // Start VM status polling
-    if (STR.pollTimer) clearInterval(STR.pollTimer);
-    STR.pollTimer = setInterval(strPollStatus, 5000);
-    strPollStatus();
   } else {
-    track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
-    knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
-    bar.innerHTML = '<div style="color:var(--dim);font-size:11px">Toggle ON to activate straddle engine on VM</div>';
-    // Stop VM-side straddle engine
     fetch(engineUrl() + '/engine/straddle/stop', {method:'POST'})
-      .then(() => strLog('✅ Straddle engine stopped on VM. SR re-activated.', 's'))
+      .then(() => strLog('Straddle stopped for today. SR re-activated. Resumes automatically tomorrow.', 's'))
       .catch(() => {});
     if (STR.pollTimer) { clearInterval(STR.pollTimer); STR.pollTimer = null; }
   }
 }
 
-// Poll VM for straddle status every 5s when active
-async function strPollStatus() {
-  if (!STR.active) return;
+function strApplyParamsToFields(p) {
+  if (!p) return;
+  if (q('str-tp'))       q('str-tp').value       = p.tp;
+  if (q('str-sl'))       q('str-sl').value       = p.sl;
+  if (q('str-vol'))      q('str-vol').value      = p.volThr;
+  if (q('str-lots'))     q('str-lots').value     = p.lots;
+  if (q('str-deploy'))   q('str-deploy').value   = p.deployPct;
+  if (q('str-floor'))    q('str-floor').value    = p.floorPrem;
+  if (q('str-autolots')) q('str-autolots').checked = p.autoLots !== false;
+}
+
+// Single source of truth: pulls whatever the VM actually has (on/off,
+// position, the full day's trades + log, running params) and reflects it
+// in the UI. Called on connect/reconnect, on opening the tab, and every 5s
+// while the engine is active. Read-only — never tells the VM to change
+// anything, just mirrors it (fixes the old bug where the position panel
+// and Manual Exit silently didn't work because the local copy of the
+// position was never actually being set from the poll response).
+async function strSyncFromEngine() {
   try {
     const r = await fetch(engineUrl() + '/engine/straddle/status');
     const d = await r.json();
     if (!d.ok) return;
-    // Update log
-    if (d.log && d.log.length) {
-      const el = q('str-log');
-      if (el) el.innerHTML = d.log.join('<br>');
+    STR.active = d.active;
+    strSetToggleUI(d.active, d.stoppedToday);
+    if (d.log) { const el = q('str-log'); if (el) el.innerHTML = d.log.join('<br>'); }
+    STR.position = d.position || null;
+    let liveSpot = null;
+    if (STR.position) {
+      try {
+        const sr = await fetch(engineUrl() + '/engine/straddle/spot');
+        const sd = await sr.json();
+        if (sd.ok) liveSpot = sd.spot;
+      } catch(_) {}
     }
-    // Update position
-    SE_position = d.position;
-    strUpdatePositionUI(d.position);
-    // Update trades
-    if (d.trades && d.trades.length) {
-      STR.trades = d.trades;
-      strRenderTrades();
+    strUpdatePositionUI(liveSpot);
+    if (d.trades) { STR.trades = d.trades; strRenderTrades(); }
+    strApplyParamsToFields(d.params);
+
+    if (d.active && !STR.pollTimer) {
+      STR.pollTimer = setInterval(strSyncFromEngine, 5000);
+    } else if (!d.active && STR.pollTimer) {
+      clearInterval(STR.pollTimer); STR.pollTimer = null;
     }
-  } catch(_) {}
+  } catch(e) { /* transient network blip — next 5s poll or next tab-open retries */ }
 }
 
 
-function strScheduleNextCheck() {
-  if (!STR.active) return;
-  const now  = new Date();
-  const secs = now.getSeconds();
-  const ms   = now.getMilliseconds();
-  // Fire at second 50 of each minute
-  const msTo50 = ((50 - secs + 60) % 60) * 1000 - ms;
-  const wait   = msTo50 <= 0 ? msTo50 + 60000 : msTo50;
-  STR.checkTimer = setTimeout(async () => {
-    await strCheckSignal();
-    strScheduleNextCheck();   // reschedule
-  }, wait);
-}
 
-async function strCheckSignal() {
-  if (!STR.active) return;
-  if (STR.position) { strLog('Position open — skip signal check', 'i'); return; }
 
-  // Market hours 09:20 – 15:25
-  const ist  = new Date(Date.now() + 5.5*3600000);
-  const hhmm = ist.getUTCHours()*60 + ist.getUTCMinutes();
-  if (hhmm < 9*60+20 || hhmm > 15*60+25) return;
 
-  const min  = ist.getUTCMinutes();
-  const sec  = ist.getUTCSeconds();
-  strLog(`Signal check at ${ist.getUTCHours()}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`);
 
+async function strManualExit() {
+  strLog('Manual exit requested — closing current position on VM', 'w');
   try {
-    // ── Fetch NIFTY spot ──────────────────────────────────────
-    const spotR = await fetch(engineUrl() + '/engine/straddle/spot');
-    const spotD = await spotR.json();
-    if (!spotD.ok) { strLog('Spot fetch failed: ' + spotD.error, 'e'); return; }
-    STR.niftySpot = spotD.spot;
-    const niftyRange = spotD.range;   // prev candle high-low range from engine
-    strLog(`NIFTY spot: ${STR.niftySpot} | prev range: ${niftyRange}pts`);
-
-    // ── Fetch stock volumes ───────────────────────────────────
-    const volR = await fetch(engineUrl() + '/engine/straddle/volcheck');
-    const volD = await volR.json();
-    if (!volD.ok) { strLog('Vol check failed: ' + volD.error, 'e'); return; }
-
-    const wVol = volD.weightedVolRatio;
-    strLog(`Weighted vol ratio: ${wVol.toFixed(2)}× | threshold: ${q('str-vol').value}×`);
-
-    const volThr = parseFloat(q('str-vol').value) || 2.0;
-    if (wVol < volThr) {
-      strLog(`Vol ${wVol.toFixed(2)} < ${volThr} — no signal`, 'i');
-      return;
-    }
-
-    strLog(`✅ VOL SURGE CONFIRMED: ${wVol.toFixed(2)}× — arming straddle!`, 's');
-
-    // ── Schedule entry at next minute open (second 0) ─────────
-    const msToNextMin = (60 - sec) * 1000 - ist.getUTCMilliseconds();
-    setTimeout(() => strEnterStraddle(), msToNextMin + 100);
-    strLog(`Entry scheduled in ${((msToNextMin+100)/1000).toFixed(1)}s`, 'w');
-
-  } catch(e) {
-    strLog('Signal check error: ' + e.message, 'e');
-  }
-}
-
-async function strEnterStraddle() {
-  if (!STR.active || STR.position) return;
-
-  try {
-    strLog('Placing straddle...', 'w');
-    const lots = parseInt(q('str-lots').value) || 6;
-    const tp   = parseFloat(q('str-tp').value) || 6;
-    const sl   = parseFloat(q('str-sl').value) || 3;
-
-    const autoLots   = q('str-autolots')?.checked !== false;
-    const deployPct  = parseFloat(q('str-deploy')?.value) || 85;
-    const floorPrem  = parseFloat(q('str-floor')?.value)  || 100;
-
-    const r = await fetch(engineUrl() + '/engine/straddle/enter', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ lots, tp, sl, autoLots, deployPct, floorPremium: floorPrem }),
-    });
+    const r = await fetch(engineUrl() + '/engine/straddle/exit', {method:'POST'});
     const d = await r.json();
-    if (!d.ok) { strLog('Entry failed: ' + d.error, 'e'); return; }
-
-    const actualLots = d.lots || lots;  // engine returns calculated lots
-    STR.position = {
-      ceKey:    d.ceKey,    peKey:    d.peKey,
-      entrySpot:d.spot,     entryTime: new Date().toLocaleTimeString('en-IN'),
-      lots: actualLots, tp, sl,
-      ceLtp: d.ceLtp,   peLtp: d.peLtp,
-      ceOrderId:d.ceOrderId, peOrderId:d.peOrderId,
-      ceClosed: false,      peClosed:  false,
-    };
-
-    strLog(`✅ CE ${d.ceStrike} + PE ${d.peStrike} × ${d.lots||lots} lots @ spot ${d.spot} | CE₹${d.ceLtp} PE₹${d.peLtp}`, 's');
-    strLog(`TP at spot ±${tp}pts | SL at spot ±${sl}pts`, 'i');
-
-    strUpdatePositionUI();
-    strStartMonitor();
-
-    // Auto time-exit at second 57 of this minute + 1
-    const ist   = new Date(Date.now() + 5.5*3600000);
-    const msOut = (60 - ist.getUTCSeconds() + 57) % 60 * 1000 + 60000;
-    setTimeout(() => strTimeExit(), msOut);
-    strLog(`Time exit in ${(msOut/1000).toFixed(0)}s`, 'i');
-
-  } catch(e) {
-    strLog('Entry error: ' + e.message, 'e');
-  }
+    if (d.ok) strLog('Exit sent to VM', 's'); else strLog('Exit failed: ' + d.error, 'e');
+  } catch(e) { strLog('Exit error: ' + e.message, 'e'); }
+  setTimeout(strSyncFromEngine, 1500);
 }
 
-function strStartMonitor() {
-  if (STR.monTimer) clearInterval(STR.monTimer);
-  // Check every 500ms for TP/SL
-  STR.monTimer = setInterval(async () => {
-    if (!STR.position) { clearInterval(STR.monTimer); return; }
-    if (STR.position.ceClosed && STR.position.peClosed) {
-      clearInterval(STR.monTimer); strClosePosition(); return;
-    }
-    try {
-      const r = await fetch(engineUrl() + '/engine/straddle/spot');
-      const d = await r.json();
-      if (!d.ok) return;
-      const spot   = d.spot;
-      const entry  = STR.position.entrySpot;
-      const upMove = spot - entry;
-      const dnMove = entry - spot;
-      const tp     = STR.position.tp;
-      const sl     = STR.position.sl;
 
-      strUpdatePositionUI(spot);
 
-      // CE leg
-      if (!STR.position.ceClosed) {
-        if (upMove >= tp) {
-          strLog(`🎯 CE TP hit! Spot=${spot} (+${upMove.toFixed(1)}pts)`, 's');
-          await strCloseLeg('CE');
-        } else if (dnMove >= sl) {
-          strLog(`⛔ CE SL hit! Spot=${spot} (-${dnMove.toFixed(1)}pts)`, 'e');
-          await strCloseLeg('CE');
-        }
-      }
-      // PE leg
-      if (!STR.position.peClosed) {
-        if (dnMove >= tp) {
-          strLog(`🎯 PE TP hit! Spot=${spot} (-${dnMove.toFixed(1)}pts)`, 's');
-          await strCloseLeg('PE');
-        } else if (upMove >= sl) {
-          strLog(`⛔ PE SL hit! Spot=${spot} (+${upMove.toFixed(1)}pts)`, 'e');
-          await strCloseLeg('PE');
-        }
-      }
-    } catch(e) {}
-  }, 500);
-}
-
-async function strCloseLeg(leg) {
-  if (!STR.position) return;
-  const key    = leg === 'CE' ? STR.position.ceKey : STR.position.peKey;
-  const orderId= leg === 'CE' ? STR.position.ceOrderId : STR.position.peOrderId;
+async function strUpdateDefaults() {
+  const body = {
+    tp: strNum('str-tp', 6), sl: strNum('str-sl', 3), volThr: strNum('str-vol', 1),
+    lots: parseInt(q('str-lots')?.value) || 6,
+    autoLots: q('str-autolots')?.checked !== false,
+    deployPct: strNum('str-deploy', 95), floorPremium: strNum('str-floor', 50),
+  };
+  const statusEl = q('str-defaults-status');
   try {
-    const r = await fetch(engineUrl() + '/engine/straddle/close-leg', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ leg, instrKey: key, lots: STR.position.lots }),
+    const r = await fetch(engineUrl() + '/engine/straddle/defaults', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
     });
     const d = await r.json();
     if (d.ok) {
-      if (leg === 'CE') STR.position.ceClosed = true;
-      else              STR.position.peClosed  = true;
-      strLog(`${leg} closed @ ₹${d.fillPrice || 'mkt'}`, 's');
-    }
-  } catch(e) { strLog(`${leg} close error: ${e.message}`, 'e'); }
+      if (statusEl) statusEl.textContent = '✅ Saved — this is the default from tomorrow (and applied live right now).';
+      strLog(`Defaults updated: TP=${body.tp} SL=${body.sl} Vol=${body.volThr}× Deploy=${body.deployPct}% Floor=₹${body.floorPremium}`, 's');
+    } else if (statusEl) statusEl.textContent = '❌ Failed: ' + d.error;
+  } catch(e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
 }
 
-async function strTimeExit() {
-  if (!STR.position) return;
-  strLog('⏱ Time exit — closing any open legs at market', 'w');
-  if (!STR.position.ceClosed) await strCloseLeg('CE');
-  if (!STR.position.peClosed) await strCloseLeg('PE');
-  setTimeout(() => strClosePosition(), 2000);
-}
-
-async function strManualExit() {
-  strLog('Manual exit triggered', 'w');
-  await strTimeExit();
-}
-
-function strClosePosition() {
-  if (!STR.position) return;
-  const p      = STR.position;
-  const trade  = {
-    time: p.entryTime, spot: p.entrySpot,
-    lots: p.lots, tp: p.tp, sl: p.sl,
-    ceKey: p.ceKey, peKey: p.peKey,
-    closeTime: new Date().toLocaleTimeString('en-IN'),
-  };
-  STR.trades.unshift(trade);
-  STR.position = null;
-  if (STR.monTimer) { clearInterval(STR.monTimer); STR.monTimer = null; }
-  strUpdatePositionUI();
-  strRenderTrades();
-  strLog(`Position closed. Total trades today: ${STR.trades.length}`, 's');
+// Pre-fill fields from the VM's persisted defaults (not just the HTML's
+// static values) as soon as we're connected — matters most on a fresh
+// browser/device that's never pressed Update Defaults before.
+async function strFetchDefaults() {
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/defaults');
+    const d = await r.json();
+    if (d.ok) strApplyParamsToFields(d.defaults);
+  } catch(_) {}
 }
 
 function strUpdatePositionUI(liveSpot) {

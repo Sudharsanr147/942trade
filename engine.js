@@ -30,6 +30,8 @@ const UPSTOX_HOST = 'api.upstox.com';
 const STATE_FILE  = '/home/ubuntu/engine-state.json';
 const SLOTS_FILE  = '/home/ubuntu/engine-slots.json';
 const BT_LOG_FILE = '/home/ubuntu/bt-logs.json';   // daily BT simulation results
+const SE_STATE_FILE    = '/home/ubuntu/engine-se-state.json';    // straddle: today's position/trades/log
+const SE_DEFAULTS_FILE = '/home/ubuntu/engine-se-defaults.json'; // straddle: persisted default params (survives across days)
 
 // ── Manual trade state ───────────────────────────────────
 const ST = {
@@ -53,6 +55,7 @@ const SLOT_TIMERS = {};          // slotId → setTimeout handle
 function saveState() {
   try {
     fs.writeFileSync(STATE_FILE, JSON.stringify({
+      token: ST.token,
       status: ST.status, armed: ST.armed, config: ST.config, instr: ST.instr,
       entryPrice: ST.entryPrice, slLevel: ST.slLevel, tgtLevel: ST.tgtLevel,
       entryOrderId: ST.entryOrderId, exitOrderId: ST.exitOrderId,
@@ -503,28 +506,115 @@ async function findInstrument(expiry, strike, type, inst) {
 // ══════════════════════════════════════════════════════════
 // STRADDLE ENGINE — runs independently on VM
 // ══════════════════════════════════════════════════════════
+// Hardcoded factory defaults — used only until SE_DEFAULTS_FILE exists.
+// Once the app calls POST /engine/straddle/defaults these are superseded
+// on disk and survive VM restarts + day rollovers.
+const SE_FACTORY_DEFAULTS = {
+  tp: 6, sl: 3, volThr: 1.0, lots: 6, autoLots: true, deployPct: 95, floorPrem: 50,
+};
+
 const SE = {
-  active:      false,   // master on/off
-  tp:          6,       // TP in spot pts
-  sl:          3,       // SL in spot pts
-  volThr:      2.0,     // vol surge threshold (× 120-min avg)
-  lots:        6,       // manual fallback lots
-  autoLots:    true,
-  deployPct:   85,
-  floorPrem:   100,
+  active:      false,   // master on/off (whether the loop is currently armed to trade)
+  tp:          SE_FACTORY_DEFAULTS.tp,
+  sl:          SE_FACTORY_DEFAULTS.sl,
+  volThr:      SE_FACTORY_DEFAULTS.volThr,
+  lots:        SE_FACTORY_DEFAULTS.lots,
+  autoLots:    SE_FACTORY_DEFAULTS.autoLots,
+  deployPct:   SE_FACTORY_DEFAULTS.deployPct,
+  floorPrem:   SE_FACTORY_DEFAULTS.floorPrem,
   checkTimer:  null,    // setInterval for minute checks
   monTimer:    null,    // setInterval for position monitor (500ms)
-  position:    null,    // active position {ceKey,peKey,entrySpot,ceClosed,peClosed,lots,tp,sl}
+  position:    null,    // active position {ceKey,peKey,entrySpot,ceClosed,peClosed,lots,tp,sl,exitDeadlineTs}
   trades:      [],      // today's completed trades
-  log:         [],      // engine log lines
+  log:         [],      // today's engine log lines
+  dateStr:     null,    // IST date (YYYY-MM-DD) this trades/log belong to
+  stoppedToday: false,  // true once user explicitly hits OFF — blocks auto-start for the rest of THIS date only
 };
+
+// IST calendar date as YYYY-MM-DD — the day boundary used for log/trade resets
+function seTodayStr() {
+  return new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+}
+
+// ── Persist today's position/trades/log so a VM restart doesn't lose them ──
+function seSaveState() {
+  try {
+    fs.writeFileSync(SE_STATE_FILE, JSON.stringify({
+      active: SE.active, dateStr: SE.dateStr, stoppedToday: SE.stoppedToday,
+      tp: SE.tp, sl: SE.sl, volThr: SE.volThr, lots: SE.lots,
+      autoLots: SE.autoLots, deployPct: SE.deployPct, floorPrem: SE.floorPrem,
+      position: SE.position, trades: SE.trades, log: SE.log,
+    }));
+  } catch(e) { console.error('seSaveState:', e.message); }
+}
+
+// ── Restore on boot. Same IST date → resume trades/log/position/active-scanning
+//    as-is. Different (or missing) date → fresh day, keep params only.
+function seLoadState() {
+  const today = seTodayStr();
+  try {
+    if (fs.existsSync(SE_STATE_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(SE_STATE_FILE, 'utf8'));
+      Object.assign(SE, {
+        tp: saved.tp ?? SE.tp, sl: saved.sl ?? SE.sl, volThr: saved.volThr ?? SE.volThr,
+        lots: saved.lots ?? SE.lots, autoLots: saved.autoLots ?? SE.autoLots,
+        deployPct: saved.deployPct ?? SE.deployPct, floorPrem: saved.floorPrem ?? SE.floorPrem,
+      });
+      if (saved.dateStr === today) {
+        SE.dateStr      = today;
+        SE.stoppedToday = !!saved.stoppedToday;
+        SE.trades       = Array.isArray(saved.trades) ? saved.trades : [];
+        SE.log          = Array.isArray(saved.log) ? saved.log : [];
+        SE.position     = saved.position || null;
+        lg(`📂 [Straddle] Same-day state restored: ${SE.trades.length} trade(s), position ${SE.position ? 'OPEN' : 'none'}, wasActive=${!!saved.active}`, 'i');
+        if (saved.active && !SE.stoppedToday) {
+          SE.active = true;
+          seScheduleNextCheck();   // resume minute-boundary scanning regardless of position
+          if (SE.position) {
+            // A position was live at crash time — resume monitoring it too.
+            seStartMonitor();
+            const msLeft = (SE.position.exitDeadlineTs || 0) - Date.now();
+            if (msLeft > 0) {
+              setTimeout(() => seTimeExit(), msLeft);
+              lg(`⏱ [Straddle] Exit timer restored (${Math.floor(msLeft/1000)}s)`, 'i');
+            } else {
+              lg('⚠️ [Straddle] Exit time already passed during downtime — closing now', 'w');
+              seTimeExit();
+            }
+          }
+        }
+      } else {
+        // New day — fresh trades/log, but remember params.
+        SE.dateStr = today; SE.stoppedToday = false; SE.trades = []; SE.log = []; SE.position = null;
+      }
+    } else {
+      SE.dateStr = today;
+    }
+  } catch(e) {
+    console.error('seLoadState:', e.message);
+    SE.dateStr = today;
+  }
+}
+
+// ── Persisted default params (separate from today's state — these are the
+//    baseline used every morning / every restart until the app pushes new ones) ──
+function seSaveDefaults(d) {
+  try { fs.writeFileSync(SE_DEFAULTS_FILE, JSON.stringify(d)); } catch(e) { console.error('seSaveDefaults:', e.message); }
+}
+function seLoadDefaults() {
+  try {
+    if (fs.existsSync(SE_DEFAULTS_FILE)) return { ...SE_FACTORY_DEFAULTS, ...JSON.parse(fs.readFileSync(SE_DEFAULTS_FILE, 'utf8')) };
+  } catch(e) { console.error('seLoadDefaults:', e.message); }
+  return { ...SE_FACTORY_DEFAULTS };
+}
 
 function seLg(msg, type='i') {
   const ts  = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'});
   const line = `[${ts}] ${msg}`;
   SE.log.unshift(line);
-  if (SE.log.length > 100) SE.log.pop();
+  if (SE.log.length > 3000) SE.log.pop();  // generous full-trading-day cap, resets to [] on day rollover
   lg(`[Straddle] ${msg}`, type);
+  seSaveState();
 }
 
 function seIsMarket() {
@@ -534,6 +624,9 @@ function seIsMarket() {
 }
 
 function seStart(params = {}) {
+  const today = seTodayStr();
+  if (SE.dateStr !== today) { SE.dateStr = today; SE.trades = []; SE.log = []; SE.position = null; }
+  SE.stoppedToday = false;   // explicit (or auto) start always clears today's manual-stop flag
   if (SE.active) { seLg('Already active', 'w'); return; }
   Object.assign(SE, {
     active: true,
@@ -549,11 +642,30 @@ function seStart(params = {}) {
   seScheduleNextCheck();
 }
 
-function seStop() {
+function seStop(reason = 'Manual') {
   SE.active = false;
+  SE.stoppedToday = true;   // blocks auto-resume (token re-push, VM restart) for the REST OF TODAY only
   if (SE.checkTimer) { clearTimeout(SE.checkTimer); SE.checkTimer = null; }
   if (SE.monTimer)   { clearInterval(SE.monTimer);  SE.monTimer   = null; }
-  seLg('Straddle engine stopped', 'w');
+  seLg(`Straddle engine stopped (${reason})`, 'w');
+}
+
+// Called whenever a fresh Upstox token arrives (morning login, or just
+// reopening the app with a cached token). Mirrors how the 30-slot SR system
+// behaves: on by default, stays on across app close/reopen and VM restarts,
+// resets to "on" every new IST day unless the user explicitly stopped it
+// THAT day.
+function seAutoStartIfNeeded() {
+  const today = seTodayStr();
+  if (SE.dateStr !== today) { SE.dateStr = today; SE.trades = []; SE.log = []; SE.position = null; SE.stoppedToday = false; }
+  if (SE.active) return;               // already running — nothing to do
+  if (SE.stoppedToday) {                // user turned it off today — respect that until tomorrow
+    lg('[Straddle] Token received — auto-start skipped (stopped by user today)', 'i');
+    return;
+  }
+  const d = seLoadDefaults();
+  lg('[Straddle] Token received — auto-starting (always-on by default)', 's');
+  seStart(d);
 }
 
 function seScheduleNextCheck() {
@@ -668,22 +780,25 @@ async function seEnter(signalSpot) {
     await sleep(400);
     const peOid = await placeMarket(pe.key, 'BUY', qty, 'D', 65);
 
+    // Time exit: second 57 of next minute — stored as an ABSOLUTE timestamp
+    // (not just a setTimeout) so a VM restart mid-position can recompute
+    // the remaining wait correctly instead of losing the deadline.
+    const now3 = new Date();
+    const msOut = (60 - now3.getSeconds() + 57) % 60 * 1000 + 60000 + 200;
+    const exitDeadlineTs = Date.now() + msOut;
+
     SE.position = {
       ceKey: ce.key, peKey: pe.key,
       entrySpot: spot, entryTime: new Date().toISOString(),
       lots: calcLots, tp: SE.tp, sl: SE.sl,
       ceClosed: false, peClosed: false,
-      ceOid, peOid,
+      ceOid, peOid, exitDeadlineTs,
     };
     seLg(`✅ ENTERED: ${atm}CE + ${atm}PE × ${calcLots} lots @ spot ${spot}`, 's');
     seLg(`TP: spot ±${SE.tp}pts | SL: spot ±${SE.sl}pts`, 'i');
 
     // Start 500ms monitor
     seStartMonitor();
-
-    // Time exit: second 57 of next minute
-    const now3 = new Date();
-    const msOut = (60 - now3.getSeconds() + 57) % 60 * 1000 + 60000 + 200;
     setTimeout(() => seTimeExit(), msOut);
     seLg(`Time exit in ${(msOut/1000).toFixed(0)}s`, 'i');
 
@@ -794,7 +909,7 @@ function seClosePosition() {
   SE.position.totalPnlPts = totalPts;
   seLg(`Trade P&L: CE${cePnl>=0?'+':''}₹${cePnl.toFixed(0)} + PE${pePnl>=0?'+':''}₹${pePnl.toFixed(0)} - ₹100 txcost = ${totalRs>=0?'+':''}₹${totalRs.toFixed(0)}`, totalRs>=0?'s':'e');
   SE.trades.unshift({ ...SE.position, closeTime: new Date().toISOString() });
-  if (SE.trades.length > 50) SE.trades.pop();
+  if (SE.trades.length > 300) SE.trades.pop();
   SE.position = null;
   if (SE.monTimer) { clearInterval(SE.monTimer); SE.monTimer = null; }
   seLg(`Position closed. Trades today: ${SE.trades.length}`, 's');
@@ -1333,14 +1448,15 @@ const server = http.createServer(async (req, res) => {
   // ── POST /engine/straddle/start ─────────────────────────
   if (p === '/engine/straddle/start' && req.method === 'POST') {
     if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    const d = seLoadDefaults();
     seStart({
-      tp:        body.tp        || 6,
-      sl:        body.sl        || 3,
-      volThr:    body.volThr    || 2.0,
-      lots:      body.lots      || 6,
-      autoLots:  body.autoLots  !== undefined ? body.autoLots : true,
-      deployPct: body.deployPct || 85,
-      floorPrem: body.floorPremium || 100,
+      tp:        body.tp        || d.tp,
+      sl:        body.sl        || d.sl,
+      volThr:    body.volThr    || d.volThr,
+      lots:      body.lots      || d.lots,
+      autoLots:  body.autoLots  !== undefined ? body.autoLots : d.autoLots,
+      deployPct: body.deployPct || d.deployPct,
+      floorPrem: body.floorPremium || d.floorPrem,
     });
     // Also deactivate SR
     ST.srActive = false;
@@ -1350,30 +1466,64 @@ const server = http.createServer(async (req, res) => {
 
   // ── POST /engine/straddle/stop ──────────────────────────
   if (p === '/engine/straddle/stop' && req.method === 'POST') {
-    seStop();
+    seStop('Manual — user toggle');
     // Re-activate SR
     ST.srActive = true;
     lg('SR re-activated — straddle engine stopped', 's');
-    return ok({ ok: true, message: 'Straddle engine stopped' });
+    return ok({ ok: true, message: 'Straddle engine stopped for the rest of today' });
   }
 
   // ── GET /engine/straddle/status ─────────────────────────
+  // Returns the FULL day's trades + log (9:15–15:30, or however much has
+  // happened so far) — the app renders whatever it gets, no truncation here.
   if (p === '/engine/straddle/status' && req.method === 'GET') {
     return ok({
       ok: true,
-      active:   SE.active,
-      position: SE.position,
-      trades:   SE.trades.slice(0, 10),
-      log:      SE.log.slice(0, 30),
+      active:       SE.active,
+      stoppedToday: SE.stoppedToday,
+      dateStr:      SE.dateStr,
+      position:     SE.position,
+      trades:       SE.trades,
+      log:          SE.log,
       params:   { tp: SE.tp, sl: SE.sl, volThr: SE.volThr, lots: SE.lots,
-                  autoLots: SE.autoLots, deployPct: SE.deployPct },
+                  autoLots: SE.autoLots, deployPct: SE.deployPct, floorPrem: SE.floorPrem },
     });
   }
 
   // ── POST /engine/straddle/exit ──────────────────────────
+  // Closes only the CURRENT open position — engine keeps running/scanning after.
   if (p === '/engine/straddle/exit' && req.method === 'POST') {
+    if (!SE.position) return ok({ ok: false, error: 'No open position' });
     await seTimeExit();
     return ok({ ok: true, message: 'Manual exit triggered' });
+  }
+
+  // ── GET /engine/straddle/defaults ───────────────────────
+  // The persisted baseline params — app reads this on load to pre-fill fields.
+  if (p === '/engine/straddle/defaults' && req.method === 'GET') {
+    return ok({ ok: true, defaults: seLoadDefaults() });
+  }
+
+  // ── POST /engine/straddle/defaults ──────────────────────
+  // "Update" button: saves these as the new baseline for every future
+  // start (today's remaining auto-resumes, and every day after). Also
+  // applies live immediately if the engine is currently running.
+  if (p === '/engine/straddle/defaults' && req.method === 'POST') {
+    const cur = seLoadDefaults();
+    const next = {
+      tp:        body.tp        ?? cur.tp,
+      sl:        body.sl        ?? cur.sl,
+      volThr:    body.volThr    ?? cur.volThr,
+      lots:      body.lots      ?? cur.lots,
+      autoLots:  body.autoLots  !== undefined ? body.autoLots : cur.autoLots,
+      deployPct: body.deployPct ?? cur.deployPct,
+      floorPrem: body.floorPremium ?? body.floorPrem ?? cur.floorPrem,
+    };
+    seSaveDefaults(next);
+    if (SE.active) Object.assign(SE, next);   // apply live, no need to stop/restart
+    lg(`[Straddle] Defaults updated: TP=${next.tp} SL=${next.sl} Vol=${next.volThr}× Deploy=${next.deployPct}% Floor=₹${next.floorPrem} Lots=${next.lots}`, 's');
+    seSaveState();
+    return ok({ ok: true, defaults: next });
   }
 
   // ── GET /engine/straddle/spot ────────────────────────────
@@ -1436,7 +1586,8 @@ const server = http.createServer(async (req, res) => {
   // ── POST /engine/straddle/enter ─────────────────────────
   if (p === '/engine/straddle/enter' && req.method === 'POST') {
     if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
-    const { lots=6, tp=6, sl=3, autoLots=true, deployPct=85, floorPremium=100 } = body;
+    const _d = seLoadDefaults();
+    const { lots=_d.lots, tp=_d.tp, sl=_d.sl, autoLots=_d.autoLots, deployPct=_d.deployPct, floorPremium=_d.floorPrem } = body;
     try {
       const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
       const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
@@ -1507,10 +1658,13 @@ const server = http.createServer(async (req, res) => {
   if (p === '/engine/token' && req.method === 'POST') {
     if (!body.token) return ok({ ok: false, error: 'No token' }, 400);
     ST.token = body.token;
+    saveState();
     lg('🔑 Token received', 's');
     // Auto-start tick collector if market hours and collector installed
     autoStartTickCollector();
-    return ok({ ok: true });
+    // Always-on straddle: resume automatically unless user turned it off today
+    seAutoStartIfNeeded();
+    return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday });
   }
 
   // ── POST /engine/arm (manual) ───────────────────────────
@@ -1595,6 +1749,7 @@ const server = http.createServer(async (req, res) => {
         sets: (s.conditionSets || []).length,
       })),
       engineStatus: ST.status,
+      srActive: ST.srActive !== false,
     });
   }
 
@@ -1938,6 +2093,21 @@ server.listen(PORT, '0.0.0.0', () => {
   lg(`Cloud engine v3 started on port ${PORT}`, 's');
   loadState();
   loadSlots();
+  seLoadState();
   btScheduleDailyRun();
   lg('BT daily scheduler started (fires at 15:32 IST)', 'i');
+});
+
+// ══════════════════════════════════════════════════════════
+// CRASH SAFETY — an uncaught error or unhandled promise rejection
+// anywhere (SR slots, straddle, backtest) would otherwise kill the
+// whole Node process. Node restarting fresh is exactly what wipes
+// SE's in-memory trades/log and forces re-activation from the app.
+// Log it and keep running instead of dying.
+// ══════════════════════════════════════════════════════════
+process.on('uncaughtException', (err) => {
+  try { lg(`🔥 uncaughtException: ${err && err.stack || err}`, 'e'); } catch(_) { console.error(err); }
+});
+process.on('unhandledRejection', (err) => {
+  try { lg(`🔥 unhandledRejection: ${err && err.stack || err}`, 'e'); } catch(_) { console.error(err); }
 });
