@@ -708,41 +708,91 @@ function seStartMonitor() {
       const tp = SE.position.tp, sl = SE.position.sl;
       // CE leg
       if (!SE.position.ceClosed) {
-        if (upMove >= tp) { seLg(`🎯 CE TP! spot=${spot} (+${upMove.toFixed(1)}pt)`, 's'); await seCloseLeg('CE'); }
-        else if (dnMove >= sl) { seLg(`⛔ CE SL! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 'e'); await seCloseLeg('CE'); }
+        if (upMove >= tp) {
+          seLg(`🎯 CE TP! spot=${spot} (+${upMove.toFixed(1)}pt)`, 's');
+          await seCloseLeg('CE', 'TP', spot);
+        } else if (dnMove >= sl) {
+          seLg(`⛔ CE SL! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 'e');
+          await seCloseLeg('CE', 'SL', spot);
+        }
       }
       // PE leg
       if (!SE.position.peClosed) {
-        if (dnMove >= tp) { seLg(`🎯 PE TP! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 's'); await seCloseLeg('PE'); }
-        else if (upMove >= sl) { seLg(`⛔ PE SL! spot=${spot} (+${upMove.toFixed(1)}pt)`, 'e'); await seCloseLeg('PE'); }
+        if (dnMove >= tp) {
+          seLg(`🎯 PE TP! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 's');
+          await seCloseLeg('PE', 'TP', spot);
+        } else if (upMove >= sl) {
+          seLg(`⛔ PE SL! spot=${spot} (+${upMove.toFixed(1)}pt)`, 'e');
+          await seCloseLeg('PE', 'SL', spot);
+        }
       }
     } catch(_) {}
   }, 500);
 }
 
-async function seCloseLeg(leg) {
+async function seCloseLeg(leg, reason, closeSpot) {
   if (!SE.position) return;
   const key = leg === 'CE' ? SE.position.ceKey : SE.position.peKey;
   try {
-    const qty = SE.position.lots * 65;
-    const oid = await placeMarket(key, 'SELL', qty, 'D', 65);
-    if (leg === 'CE') SE.position.ceClosed = true;
-    else              SE.position.peClosed  = true;
-    seLg(`${leg} closed: ${oid}`, 's');
+    const qty    = SE.position.lots * 65;
+    const oid    = await placeMarket(key, 'SELL', qty, 'D', 65);
+    const tp     = SE.position.tp;
+    const sl     = SE.position.sl;
+    const DELTA  = 0.5;
+    const LOT    = 65;
+    // P&L per lot in option pts then rupees
+    // TP hit → gained tp×delta opt pts | SL hit → lost sl×delta opt pts
+    // Time exit → use actual spot move
+    let optPnlPts;
+    if (reason === 'TP') {
+      optPnlPts = tp * DELTA;
+    } else if (reason === 'SL') {
+      optPnlPts = -(sl * DELTA);
+    } else {
+      // Time exit — estimate from spot move
+      const entry = SE.position.entrySpot;
+      const move  = leg === 'CE' ? (closeSpot - entry) : (entry - closeSpot);
+      optPnlPts = Math.max(-(sl * DELTA), Math.min(tp * DELTA, move * DELTA));
+    }
+    const pnlRs = optPnlPts * LOT * SE.position.lots;
+
+    if (leg === 'CE') {
+      SE.position.ceClosed    = true;
+      SE.position.ceReason    = reason || 'TIME';
+      SE.position.cePnlPts    = optPnlPts;
+      SE.position.cePnlRs     = pnlRs;
+      SE.position.ceCloseSpot = closeSpot;
+    } else {
+      SE.position.peClosed    = true;
+      SE.position.peReason    = reason || 'TIME';
+      SE.position.pePnlPts    = optPnlPts;
+      SE.position.pePnlRs     = pnlRs;
+      SE.position.peCloseSpot = closeSpot;
+    }
+    seLg(`${leg} closed (${reason||'TIME'}): ${oid} | P&L: ${optPnlPts > 0 ? '+' : ''}${optPnlPts.toFixed(2)} opt pts = ₹${pnlRs > 0 ? '+' : ''}${pnlRs.toFixed(0)}`, reason==='TP'?'s':'w');
   } catch(e) { seLg(`${leg} close error: ${e.message}`, 'e'); }
 }
 
 async function seTimeExit() {
   if (!SE.position) return;
   seLg('⏱ Time exit — closing open legs', 'w');
-  if (!SE.position.ceClosed) await seCloseLeg('CE');
+  const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050').catch(()=>null);
+  const spot = sd ? parseFloat(Object.values(sd?.data||{})[0]?.last_price) : SE.position.entrySpot;
+  if (!SE.position.ceClosed) await seCloseLeg('CE', 'TIME', spot);
   await sleep(400);
-  if (!SE.position.peClosed) await seCloseLeg('PE');
+  if (!SE.position.peClosed) await seCloseLeg('PE', 'TIME', spot);
   setTimeout(() => seClosePosition(), 1500);
 }
 
 function seClosePosition() {
   if (!SE.position) return;
+  const cePnl   = SE.position.cePnlRs || 0;
+  const pePnl   = SE.position.pePnlRs || 0;
+  const totalRs = cePnl + pePnl - 100; // deduct ₹100 txcost
+  const totalPts= (SE.position.cePnlPts||0) + (SE.position.pePnlPts||0);
+  SE.position.totalPnlRs  = totalRs;
+  SE.position.totalPnlPts = totalPts;
+  seLg(`Trade P&L: CE${cePnl>=0?'+':''}₹${cePnl.toFixed(0)} + PE${pePnl>=0?'+':''}₹${pePnl.toFixed(0)} - ₹100 txcost = ${totalRs>=0?'+':''}₹${totalRs.toFixed(0)}`, totalRs>=0?'s':'e');
   SE.trades.unshift({ ...SE.position, closeTime: new Date().toISOString() });
   if (SE.trades.length > 50) SE.trades.pop();
   SE.position = null;
