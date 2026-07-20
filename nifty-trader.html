@@ -373,7 +373,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <div id="hdr">
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
-    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.6 · 20-Jul-2026</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px">v5.7 · 20-Jul-2026</div>
   </div>
   <div class="h-right">
     <span id="wl-ind" style="font-size:13px;display:none" title="Screen wake lock active">🔆</span>
@@ -981,6 +981,9 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- STRADDLE TAB                                        -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div class="tab" id="t-straddle">
+    <div style="color:#ffffff;font-size:20px;font-weight:bold;padding:20px;background:#ff0000">
+      ✅ STRADDLE TAB LOADED — IF YOU SEE THIS IT IS WORKING
+    </div>
     <div style="color:#ffffff;font-size:16px;font-weight:bold;padding:12px">⚡ STRADDLE ENGINE</div>
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -1988,8 +1991,8 @@ setInterval(() => {
 function go(tab) {
   // Straddle tab activation — guard against STR not yet initialised
   if (tab === 'straddle') {
-    try { strRenderTrades(); } catch(_) {}
-    try { strUpdatePositionUI(typeof STR !== 'undefined' ? STR.niftySpot : null); } catch(_) {}
+    try { strRenderTrades(); } catch(e) { console.error('strRenderTrades error:',e); }
+    try { strUpdatePositionUI(typeof STR !== 'undefined' ? STR.niftySpot : null); } catch(e) { console.error('strUpdatePositionUI error:',e); }
   }
   // If navigating to Replay tab and Live Test sub-tab is active → refresh
   if (tab === 'bt') {
