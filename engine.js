@@ -1408,6 +1408,15 @@ async function executeAutoSlot(slot) {
     return;
   }
 
+  // Re-check the master switch AT FIRE TIME, not just when the timer was
+  // armed. A slot can sit armed for hours; if SR gets switched off in that
+  // window the timer is still live and would otherwise fire anyway.
+  if (ST.srActive === false) {
+    lg(`[Auto] "${slot.name}": SR switched off since arming — not firing`, 'w');
+    SLOT_STATUS[slot.id] = 'skipped';
+    return;
+  }
+
   lg(`[Auto] "${slot.name}": ⏱ entry time — fetching candles…`, 'i');
   SLOT_STATUS[slot.id] = 'checking';
   try {
@@ -1517,6 +1526,18 @@ const server = http.createServer(async (req, res) => {
     ST.srActiveDateStr = seTodayStr();
     if (ST.srActive && SE.active) {
       seStop('SR activated');   // enforce mutual exclusion the other direction too
+    }
+    if (ST.srActive) {
+      // Arm the roster NOW. Without this, a roster pushed while SR was off
+      // (the normal case now that off is the default) would stay un-armed
+      // forever — scheduleAllSlots() otherwise only runs at boot or on push,
+      // never at the moment you actually flip this toggle on.
+      scheduleAllSlots();
+    } else {
+      // Clear armed timers immediately so the UI doesn't keep showing
+      // "waiting" for slots that are now dead (executeAutoSlot would reject
+      // them at fire time regardless, but this keeps the display honest).
+      clearAllSlotTimers();
     }
     saveState();
     lg(`SR system ${ST.srActive ? 'ACTIVATED ✅' : 'DEACTIVATED ⛔'}`, ST.srActive ? 's' : 'w');
