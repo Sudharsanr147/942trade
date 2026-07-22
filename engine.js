@@ -42,7 +42,21 @@ const ST = {
   spotPrice: null, optionPrice: null, pnl: null,
   entryOrderId: null, exitOrderId: null, log: [],
   _entryTimer: null, _exitTimer: null, _monitorIvl: null,
+  srActive: false,        // OFF by default — mirrors straddle being ON by default
+  srActiveDateStr: null,  // IST date this srActive value applies to; resets to false on a new day
 };
+
+// Resets SR back to its default (off) at the start of each new IST trading
+// day, regardless of what it was left at yesterday. Called at boot and on
+// every token push, same pattern as the straddle engine's day boundary.
+function srResetIfNewDay() {
+  const today = seTodayStr();
+  if (ST.srActiveDateStr !== today) {
+    ST.srActive = false;
+    ST.srActiveDateStr = today;
+    saveState();
+  }
+}
 
 // ── Auto-strategy slot state ─────────────────────────────
 let AUTO_SLOTS   = [];           // slot definitions from app
@@ -61,6 +75,7 @@ function saveState() {
       entryOrderId: ST.entryOrderId, exitOrderId: ST.exitOrderId,
       optionPrice: ST.optionPrice, spotPrice: ST.spotPrice, pnl: ST.pnl,
       exitTs: ST.config?.exitTs || null, log: ST.log.slice(0, 50),
+      srActive: ST.srActive, srActiveDateStr: ST.srActiveDateStr,
     }));
   } catch(e) { console.error('saveState:', e.message); }
 }
@@ -70,7 +85,8 @@ function loadState() {
     if (!fs.existsSync(STATE_FILE)) return;
     const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
     Object.assign(ST, saved);
-    lg(`📂 Trade state loaded: ${ST.status}`, 'i');
+    srResetIfNewDay();   // SR resets to off if this restore is from a previous day
+    lg(`📂 Trade state loaded: ${ST.status} | SR active: ${ST.srActive}`, 'i');
     if (ST.status === 'live' && ST.instr?.key) {
       lg('📂 Active trade restored — resuming monitor', 's');
       startMonitor();
@@ -638,6 +654,13 @@ function seStart(params = {}) {
     deployPct: params.deployPct || SE.deployPct,
     floorPrem: params.floorPrem || SE.floorPrem,
   });
+  // Enforce mutual exclusion here (not just in the HTTP route) so this also
+  // applies on auto-start via token push, not only a manual toggle press.
+  if (ST.srActive) {
+    ST.srActive = false;
+    lg('SR deactivated — straddle engine started', 'w');
+  }
+  saveState();
   seLg(`Straddle engine started — TP=${SE.tp}pt SL=${SE.sl}pt Vol≥${SE.volThr}×`, 's');
   seScheduleNextCheck();
 }
@@ -648,13 +671,17 @@ function seStop(reason = 'Manual') {
   if (SE.checkTimer) { clearTimeout(SE.checkTimer); SE.checkTimer = null; }
   if (SE.monTimer)   { clearInterval(SE.monTimer);  SE.monTimer   = null; }
   seLg(`Straddle engine stopped (${reason})`, 'w');
+  // Note: SR is NOT auto-reactivated here anymore — SR is off by default now,
+  // same as straddle used to require an explicit ON. If you want SR running,
+  // turn it on explicitly from the SR tab.
 }
 
 // Called whenever a fresh Upstox token arrives (morning login, or just
 // reopening the app with a cached token). Mirrors how the 30-slot SR system
-// behaves: on by default, stays on across app close/reopen and VM restarts,
-// resets to "on" every new IST day unless the user explicitly stopped it
-// THAT day.
+// USED TO behave: on by default, stays on across app close/reopen and VM
+// restarts, resets to "on" every new IST day unless the user explicitly
+// stopped it THAT day. (SR itself is now the opposite — off by default;
+// see srResetIfNewDay.)
 function seAutoStartIfNeeded() {
   const today = seTodayStr();
   if (SE.dateStr !== today) { SE.dateStr = today; SE.trades = []; SE.log = []; SE.position = null; SE.stoppedToday = false; }
@@ -1487,6 +1514,11 @@ const server = http.createServer(async (req, res) => {
   // ── POST /engine/sr-active ──────────────────────────────
   if (p === '/engine/sr-active' && req.method === 'POST') {
     ST.srActive = (body.active !== false);
+    ST.srActiveDateStr = seTodayStr();
+    if (ST.srActive && SE.active) {
+      seStop('SR activated');   // enforce mutual exclusion the other direction too
+    }
+    saveState();
     lg(`SR system ${ST.srActive ? 'ACTIVATED ✅' : 'DEACTIVATED ⛔'}`, ST.srActive ? 's' : 'w');
     return ok({ ok: true, srActive: ST.srActive });
   }
@@ -1504,19 +1536,13 @@ const server = http.createServer(async (req, res) => {
       deployPct: body.deployPct || d.deployPct,
       floorPrem: body.floorPremium || d.floorPrem,
     });
-    // Also deactivate SR
-    ST.srActive = false;
-    lg('SR deactivated — straddle engine started', 'w');
     return ok({ ok: true, message: 'Straddle engine started on VM' });
   }
 
   // ── POST /engine/straddle/stop ──────────────────────────
   if (p === '/engine/straddle/stop' && req.method === 'POST') {
     seStop('Manual — user toggle');
-    // Re-activate SR
-    ST.srActive = true;
-    lg('SR re-activated — straddle engine stopped', 's');
-    return ok({ ok: true, message: 'Straddle engine stopped for the rest of today' });
+    return ok({ ok: true, message: 'Straddle engine stopped for the rest of today. SR stays off unless you turn it on.' });
   }
 
   // ── GET /engine/straddle/status ─────────────────────────
@@ -1739,9 +1765,11 @@ const server = http.createServer(async (req, res) => {
     lg('🔑 Token received', 's');
     // Auto-start tick collector if market hours and collector installed
     autoStartTickCollector();
+    // SR resets to off (its default) on a new day even if the process never restarted
+    srResetIfNewDay();
     // Always-on straddle: resume automatically unless user turned it off today
     seAutoStartIfNeeded();
-    return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday });
+    return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday, srActive: ST.srActive });
   }
 
   // ── POST /engine/arm (manual) ───────────────────────────

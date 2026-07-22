@@ -695,19 +695,19 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
                 padding:10px 12px;margin-bottom:10px">
       <div>
         <div style="font-size:12px;font-weight:600;color:var(--c1)">30-Slot SR System</div>
-        <div id="sr-master-status" style="font-size:10px;color:var(--green);margin-top:2px">
-          ✅ Active — engine will run all SR slots today
+        <div id="sr-master-status" style="font-size:10px;color:var(--dim);margin-top:2px">
+          ⛔ Off by default — toggle ON to run SR slots today
         </div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
-        <input type="checkbox" id="sr-master-toggle" checked
+        <input type="checkbox" id="sr-master-toggle"
           onchange="srMasterToggle(this.checked)"
           style="opacity:0;width:0;height:0">
         <span id="sr-toggle-track" style="position:absolute;top:0;left:0;right:0;bottom:0;
-          background:var(--green);border-radius:24px;transition:.3s">
+          background:var(--s3);border:1px solid var(--bdr);border-radius:24px;transition:.3s">
           <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;
-            background:#fff;border-radius:50%;transition:.3s;
-            transform:translateX(20px)" id="sr-toggle-knob"></span>
+            background:var(--dim);border-radius:50%;transition:.3s;
+            transform:translateX(0)" id="sr-toggle-knob"></span>
         </span>
       </label>
     </div>
@@ -4845,17 +4845,17 @@ function srSetToggleUI(active) {
   if (!track || !knob || !status) return;
   if (cb) cb.checked = !!active;
   if (active) {
-    track.style.background  = 'var(--green)';
+    track.style.background  = 'var(--green)'; track.style.border = 'none';
     knob.style.transform    = 'translateX(20px)';
     knob.style.background   = '#fff';
     status.style.color      = 'var(--green)';
     status.textContent      = '✅ Active — engine will run all SR slots today';
   } else {
-    track.style.background  = 'var(--red)';
+    track.style.background  = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
     knob.style.transform    = 'translateX(0)';
-    knob.style.background   = '#fff';
-    status.style.color      = 'var(--red)';
-    status.textContent      = '⛔ SR Deactivated — slots will not fire today';
+    knob.style.background   = 'var(--dim)';
+    status.style.color      = 'var(--dim)';
+    status.textContent      = '⛔ Off by default — toggle ON to run SR slots today';
   }
 }
 
