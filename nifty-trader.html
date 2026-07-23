@@ -374,7 +374,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
     <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px;display:flex;align-items:center;gap:8px">
-      <span>v6.7 · 23-Jul-2026</span>
+      <span>v6.8 · 23-Jul-2026</span>
       <span id="hard-refresh-btn" onclick="hardRefreshApp()"
         title="Hard refresh — reload latest version from GitHub. Keeps your token and settings."
         style="cursor:pointer;color:var(--blue);font-size:13px;line-height:1;padding:2px 3px;
@@ -1022,7 +1022,8 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
          padding:10px 12px;margin-bottom:10px">
       <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
            color:#aabbcc;margin-bottom:8px">Parameters</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px"
+           oninput="strMarkParamsDirty()" onchange="strMarkParamsDirty()">
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">TP (spot pts)</div>
           <input id="str-tp" type="number" value="8" min="3" max="20" step="0.5"
@@ -5029,6 +5030,18 @@ function strMasterToggle(on) {
   }
 }
 
+// True from the moment the user touches any parameter field until they
+// press Update Defaults. While true, the 5s background sync leaves the
+// fields alone instead of overwriting whatever's being typed with the
+// last-saved server value — that was the bug where an edit reverted to
+// the old number within a few seconds.
+let strParamsDirty = false;
+function strMarkParamsDirty() {
+  strParamsDirty = true;
+  const statusEl = q('str-defaults-status');
+  if (statusEl) statusEl.textContent = '✏️ Unsaved changes — press Update Defaults to save';
+}
+
 function strApplyParamsToFields(p) {
   if (!p) return;
   if (q('str-tp'))       q('str-tp').value       = p.tp;
@@ -5070,7 +5083,7 @@ async function strSyncFromEngine() {
     }
     strUpdatePositionUI(liveSpot);
     if (d.trades) { STR.trades = d.trades; strRenderTrades(); }
-    strApplyParamsToFields(d.params);
+    if (!strParamsDirty) strApplyParamsToFields(d.params);   // don't clobber an in-progress edit
 
     if (d.active && !STR.pollTimer) {
       STR.pollTimer = setInterval(strSyncFromEngine, 5000);
@@ -5113,6 +5126,7 @@ async function strUpdateDefaults() {
     });
     const d = await r.json();
     if (d.ok) {
+      strParamsDirty = false;   // saved — safe for background sync to resume
       if (statusEl) statusEl.textContent = '✅ Saved — this is the default from tomorrow (and applied live right now).';
       strLog(`Defaults updated: TP=${body.tp} SL=${body.sl} Vol=${body.volThr}× Trend=${body.trendPts}pt/${body.trendOffsetMin}min ExitCutoff=x+${body.exitOffsetMin} Deploy=${body.deployPct}% Floor=₹${body.floorPremium}`, 's');
     } else if (statusEl) statusEl.textContent = '❌ Failed: ' + d.error;
