@@ -374,7 +374,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
     <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px;display:flex;align-items:center;gap:8px">
-      <span>v6.5 · 22-Jul-2026</span>
+      <span>v6.7 · 23-Jul-2026</span>
       <span id="hard-refresh-btn" onclick="hardRefreshApp()"
         title="Hard refresh — reload latest version from GitHub. Keeps your token and settings."
         style="cursor:pointer;color:var(--blue);font-size:13px;line-height:1;padding:2px 3px;
@@ -1025,13 +1025,13 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">TP (spot pts)</div>
-          <input id="str-tp" type="number" value="6" min="3" max="20" step="0.5"
+          <input id="str-tp" type="number" value="8" min="3" max="20" step="0.5"
             style="width:100%;background:#0f1923;border:1px solid #2a3f55;
                    color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">SL (spot pts)</div>
-          <input id="str-sl" type="number" value="3" min="1" max="10" step="0.5"
+          <input id="str-sl" type="number" value="4" min="1" max="10" step="0.5"
             style="width:100%;background:#0f1923;border:1px solid #2a3f55;
                    color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
@@ -1047,6 +1047,34 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
             style="width:100%;background:#0f1923;border:1px solid #2a3f55;
                    color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
         </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Trend filter (index pts)</div>
+          <input id="str-trend-pts" type="number" value="10" min="0" max="100" step="1"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">...vs open N min ago</div>
+          <input id="str-trend-offset" type="number" value="2" min="1" max="30" step="1"
+            oninput="updateTrendExample()"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div id="str-trend-example" style="grid-column:1/-1;font-size:10px;color:#79c0ff;margin-top:-4px"></div>
+        <div style="grid-column:1/-1;font-size:10px;color:#aabbcc;margin-top:-2px">
+          Only signals when spot has ALSO moved this many points vs N minutes ago. Set points to 0 to disable.
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Exit hard cutoff (min after signal)</div>
+          <input id="str-exit-offset" type="number" value="4" min="2" max="30" step="1"
+            oninput="updateExitExample()"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div style="display:flex;align-items:flex-end;font-size:10px;color:#aabbcc;padding-bottom:6px">
+          Entry is always signal+1min. This sets how much longer to hold before force-closing.
+        </div>
+        <div id="str-exit-example" style="grid-column:1/-1;font-size:10px;color:#79c0ff;margin-top:-4px"></div>
         <div>
           <div style="color:#aabbcc;margin-bottom:2px">Deploy % of balance</div>
           <input id="str-deploy" type="number" value="95" min="50" max="99" step="5"
@@ -2437,6 +2465,7 @@ function init() {
     strSyncFromEngine();
     srSyncFromEngine();
   }
+  if (typeof updateTrendExample === 'function') { updateTrendExample(); updateExitExample(); }
 
   // ── Restore active trade if app restarted mid-trade ──────────
   const activeStatuses = ['live', 'sl_hit', 'tgt_hit', 'placed'];
@@ -4928,6 +4957,29 @@ function strNum(id, def) {
   return Number.isFinite(n) ? n : def;
 }
 
+function hhmm(d) { return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+
+// Live-updates as the field changes, using the CURRENT time as "the minute
+// being checked" so the example is concrete rather than abstract.
+function updateTrendExample() {
+  const offset = parseInt(q('str-trend-offset')?.value) || 2;
+  const el = q('str-trend-example');
+  if (!el) return;
+  const x = new Date(); x.setSeconds(0,0);
+  const ref = new Date(x.getTime() - offset*60000);
+  el.textContent = `Example: checking during ${hhmm(x)} → compares against the open of ${hhmm(ref)}`;
+}
+
+function updateExitExample() {
+  const offset = parseInt(q('str-exit-offset')?.value) || 4;
+  const el = q('str-exit-example');
+  if (!el) return;
+  const x = new Date(); x.setSeconds(0,0);
+  const entry  = new Date(x.getTime() + 1*60000);
+  const cutoff = new Date(x.getTime() + offset*60000);
+  el.textContent = `Example: signal during ${hhmm(x)} → entry at ${hhmm(entry)}:00 → forced exit by ${hhmm(cutoff)}:57`;
+}
+
 function strSetToggleUI(active, stoppedToday) {
   const track = q('str-toggle-track');
   const knob  = q('str-toggle-knob');
@@ -4954,10 +5006,12 @@ function strMasterToggle(on) {
   strSetToggleUI(on);
   if (on) {
     const params = {
-      tp: strNum('str-tp', 6), sl: strNum('str-sl', 3), volThr: strNum('str-vol', 1),
+      tp: strNum('str-tp', 8), sl: strNum('str-sl', 4), volThr: strNum('str-vol', 1),
       lots: parseInt(q('str-lots')?.value) || 6,
       autoLots: q('str-autolots')?.checked !== false,
       deployPct: strNum('str-deploy', 95), floorPremium: strNum('str-floor', 50),
+      trendPts: strNum('str-trend-pts', 10), trendOffsetMin: parseInt(q('str-trend-offset')?.value) || 2,
+      exitOffsetMin: parseInt(q('str-exit-offset')?.value) || 4,
     };
     fetch(engineUrl() + '/engine/straddle/start', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -4984,6 +5038,10 @@ function strApplyParamsToFields(p) {
   if (q('str-deploy'))   q('str-deploy').value   = p.deployPct;
   if (q('str-floor'))    q('str-floor').value    = p.floorPrem;
   if (q('str-autolots')) q('str-autolots').checked = p.autoLots !== false;
+  if (q('str-trend-pts') && p.trendPts !== undefined)             q('str-trend-pts').value    = p.trendPts;
+  if (q('str-trend-offset') && p.trendOffsetMin !== undefined)    q('str-trend-offset').value = p.trendOffsetMin;
+  if (q('str-exit-offset') && p.exitOffsetMin !== undefined)      q('str-exit-offset').value  = p.exitOffsetMin;
+  updateTrendExample(); updateExitExample();
 }
 
 // Single source of truth: pulls whatever the VM actually has (on/off,
@@ -5041,10 +5099,12 @@ async function strManualExit() {
 
 async function strUpdateDefaults() {
   const body = {
-    tp: strNum('str-tp', 6), sl: strNum('str-sl', 3), volThr: strNum('str-vol', 1),
+    tp: strNum('str-tp', 8), sl: strNum('str-sl', 4), volThr: strNum('str-vol', 1),
     lots: parseInt(q('str-lots')?.value) || 6,
     autoLots: q('str-autolots')?.checked !== false,
     deployPct: strNum('str-deploy', 95), floorPremium: strNum('str-floor', 50),
+    trendPts: strNum('str-trend-pts', 10), trendOffsetMin: parseInt(q('str-trend-offset')?.value) || 2,
+    exitOffsetMin: parseInt(q('str-exit-offset')?.value) || 4,
   };
   const statusEl = q('str-defaults-status');
   try {
@@ -5054,7 +5114,7 @@ async function strUpdateDefaults() {
     const d = await r.json();
     if (d.ok) {
       if (statusEl) statusEl.textContent = '✅ Saved — this is the default from tomorrow (and applied live right now).';
-      strLog(`Defaults updated: TP=${body.tp} SL=${body.sl} Vol=${body.volThr}× Deploy=${body.deployPct}% Floor=₹${body.floorPremium}`, 's');
+      strLog(`Defaults updated: TP=${body.tp} SL=${body.sl} Vol=${body.volThr}× Trend=${body.trendPts}pt/${body.trendOffsetMin}min ExitCutoff=x+${body.exitOffsetMin} Deploy=${body.deployPct}% Floor=₹${body.floorPremium}`, 's');
     } else if (statusEl) statusEl.textContent = '❌ Failed: ' + d.error;
   } catch(e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
 }

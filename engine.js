@@ -526,7 +526,9 @@ async function findInstrument(expiry, strike, type, inst) {
 // Once the app calls POST /engine/straddle/defaults these are superseded
 // on disk and survive VM restarts + day rollovers.
 const SE_FACTORY_DEFAULTS = {
-  tp: 6, sl: 3, volThr: 1.0, lots: 6, autoLots: true, deployPct: 95, floorPrem: 50,
+  tp: 8, sl: 4, volThr: 1.0, lots: 6, autoLots: true, deployPct: 95, floorPrem: 50,
+  trendPts: 10, trendOffsetMin: 2,   // trend filter: |spot - open[x-trendOffsetMin]| >= trendPts. trendPts:0 disables it.
+  exitOffsetMin: 4,   // hard time-exit at second 57 of candle (x + exitOffsetMin), x = the signal-check candle
 };
 
 const SE = {
@@ -538,6 +540,9 @@ const SE = {
   autoLots:    SE_FACTORY_DEFAULTS.autoLots,
   deployPct:   SE_FACTORY_DEFAULTS.deployPct,
   floorPrem:   SE_FACTORY_DEFAULTS.floorPrem,
+  trendPts:       SE_FACTORY_DEFAULTS.trendPts,
+  trendOffsetMin: SE_FACTORY_DEFAULTS.trendOffsetMin,
+  exitOffsetMin:  SE_FACTORY_DEFAULTS.exitOffsetMin,
   checkTimer:  null,    // setInterval for minute checks
   monTimer:    null,    // setInterval for position monitor (500ms)
   position:    null,    // active position {ceKey,peKey,entrySpot,ceClosed,peClosed,lots,tp,sl,exitDeadlineTs}
@@ -559,6 +564,7 @@ function seSaveState() {
       active: SE.active, dateStr: SE.dateStr, stoppedToday: SE.stoppedToday,
       tp: SE.tp, sl: SE.sl, volThr: SE.volThr, lots: SE.lots,
       autoLots: SE.autoLots, deployPct: SE.deployPct, floorPrem: SE.floorPrem,
+      trendPts: SE.trendPts, trendOffsetMin: SE.trendOffsetMin, exitOffsetMin: SE.exitOffsetMin,
       position: SE.position, trades: SE.trades, log: SE.log,
     }));
   } catch(e) { console.error('seSaveState:', e.message); }
@@ -575,6 +581,8 @@ function seLoadState() {
         tp: saved.tp ?? SE.tp, sl: saved.sl ?? SE.sl, volThr: saved.volThr ?? SE.volThr,
         lots: saved.lots ?? SE.lots, autoLots: saved.autoLots ?? SE.autoLots,
         deployPct: saved.deployPct ?? SE.deployPct, floorPrem: saved.floorPrem ?? SE.floorPrem,
+        trendPts: saved.trendPts ?? SE.trendPts, trendOffsetMin: saved.trendOffsetMin ?? SE.trendOffsetMin,
+        exitOffsetMin: saved.exitOffsetMin ?? SE.exitOffsetMin,
       });
       if (saved.dateStr === today) {
         SE.dateStr      = today;
@@ -653,6 +661,9 @@ function seStart(params = {}) {
     autoLots:  params.autoLots  !== undefined ? params.autoLots : SE.autoLots,
     deployPct: params.deployPct || SE.deployPct,
     floorPrem: params.floorPrem || SE.floorPrem,
+    trendPts:       params.trendPts       ?? SE.trendPts,
+    trendOffsetMin: params.trendOffsetMin ?? SE.trendOffsetMin,
+    exitOffsetMin:  params.exitOffsetMin  ?? SE.exitOffsetMin,
   });
   // Enforce mutual exclusion here (not just in the HTTP route) so this also
   // applies on auto-start via token push, not only a manual toggle press.
@@ -727,6 +738,38 @@ async function seCheck() {
     const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
     if (!spot) { seLg('Spot unavailable', 'w'); return; }
     seLg(`NIFTY spot: ${spot}`);
+
+    // 1b. Trend filter — only proceed to the (expensive, 9-call) volume check
+    // if spot has also moved trendPts away from the open of the candle
+    // trendOffsetMin minutes ago. Selects for "there's a trend right now",
+    // not just a volume blip. trendPts:0 disables this gate entirely.
+    //
+    // "x-2" means: this check is evaluating minute X (right now, at :50
+    // seconds past its start) — the reference is the OPEN of minute X-2,
+    // i.e. two minutes before the start of the CURRENT minute, not two
+    // minutes before "now". Matched by actual candle timestamp, not by
+    // array position, so this can't silently drift if the API's ordering
+    // or inclusion of the still-forming candle ever changes.
+    if (SE.trendPts > 0) {
+      const td = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute');
+      const tcandles = td?.data?.candles || [];
+      const xStartMs  = Math.floor(Date.now() / 60000) * 60000;         // start of minute X (IST and UTC minute boundaries coincide — 5:30 offset is a whole number of minutes)
+      const targetMs  = xStartMs - SE.trendOffsetMin * 60000;            // start of minute X-trendOffsetMin
+      let refCandle = null, refTs = null;
+      for (const cnd of tcandles) {
+        const cndMs = new Date(cnd[0]).getTime();
+        if (Math.abs(cndMs - targetMs) < 30000) { refCandle = cnd; refTs = cnd[0]; break; }  // 30s tolerance for candle-boundary rounding
+      }
+      if (!refCandle) { seLg(`Trend filter: no candle found for x-${SE.trendOffsetMin} (need more history, or market just opened) — skip`, 'w'); return; }
+      const refOpen = parseFloat(refCandle[1]);
+      const trendMove = spot - refOpen;
+      seLg(`Trend check: spot ${spot} vs open ${SE.trendOffsetMin}min ago [${refTs}] = ${refOpen} → ${trendMove>=0?'+':''}${trendMove.toFixed(1)}pts (need ±${SE.trendPts})`);
+      if (Math.abs(trendMove) < SE.trendPts) {
+        seLg(`Trend ${Math.abs(trendMove).toFixed(1)} < ${SE.trendPts} — no signal`);
+        return;
+      }
+      seLg(`✅ Trend confirmed: ${trendMove>=0?'+':''}${trendMove.toFixed(1)}pts vs ${SE.trendOffsetMin}min ago`, 's');
+    }
 
     // 2. Get weighted vol ratio across 9 stocks
     const STOCKS = [
@@ -827,11 +870,13 @@ async function seEnter(signalSpot) {
     await sleep(400);
     const peOid = await placeMarket(pe.key, 'BUY', qty, 'D', 65);
 
-    // Time exit: second 57 of next minute — stored as an ABSOLUTE timestamp
-    // (not just a setTimeout) so a VM restart mid-position can recompute
-    // the remaining wait correctly instead of losing the deadline.
+    // Time exit: second 57 of candle (x + exitOffsetMin), x = the signal
+    // candle this entry came from — stored as an ABSOLUTE timestamp (not
+    // just a setTimeout) so a VM restart mid-position can recompute the
+    // remaining wait correctly instead of losing the deadline.
     const now3 = new Date();
-    const msOut = (60 - now3.getSeconds() + 57) % 60 * 1000 + 60000 + 200;
+    const extraMin = Math.max(0, SE.exitOffsetMin - 2);   // exitOffsetMin=2 reproduces the original timing exactly
+    const msOut = (60 - now3.getSeconds() + 57) % 60 * 1000 + 60000 + 200 + extraMin * 60000;
     const exitDeadlineTs = Date.now() + msOut;
 
     SE.position = {
@@ -1556,6 +1601,9 @@ const server = http.createServer(async (req, res) => {
       autoLots:  body.autoLots  !== undefined ? body.autoLots : d.autoLots,
       deployPct: body.deployPct || d.deployPct,
       floorPrem: body.floorPremium || d.floorPrem,
+      trendPts:       body.trendPts       ?? d.trendPts,
+      trendOffsetMin: body.trendOffsetMin ?? d.trendOffsetMin,
+      exitOffsetMin:  body.exitOffsetMin  ?? d.exitOffsetMin,
     });
     return ok({ ok: true, message: 'Straddle engine started on VM' });
   }
@@ -1579,7 +1627,8 @@ const server = http.createServer(async (req, res) => {
       trades:       SE.trades,
       log:          SE.log,
       params:   { tp: SE.tp, sl: SE.sl, volThr: SE.volThr, lots: SE.lots,
-                  autoLots: SE.autoLots, deployPct: SE.deployPct, floorPrem: SE.floorPrem },
+                  autoLots: SE.autoLots, deployPct: SE.deployPct, floorPrem: SE.floorPrem,
+                  trendPts: SE.trendPts, trendOffsetMin: SE.trendOffsetMin, exitOffsetMin: SE.exitOffsetMin },
     });
   }
 
@@ -1590,7 +1639,7 @@ const server = http.createServer(async (req, res) => {
     const lines = [];
     lines.push(`942 Trade — Straddle report — ${SE.dateStr || seTodayStr()}`);
     lines.push(`Active: ${SE.active} | Stopped by user today: ${SE.stoppedToday}`);
-    lines.push(`Params: TP=${SE.tp}pt SL=${SE.sl}pt Vol>=${SE.volThr}x Lots=${SE.lots}${SE.autoLots?' (auto)':''} Deploy=${SE.deployPct}% Floor=Rs${SE.floorPrem}`);
+    lines.push(`Params: TP=${SE.tp}pt SL=${SE.sl}pt Vol>=${SE.volThr}x Trend>=${SE.trendPts}pt/${SE.trendOffsetMin}min ExitCutoff=x+${SE.exitOffsetMin} Lots=${SE.lots}${SE.autoLots?' (auto)':''} Deploy=${SE.deployPct}% Floor=Rs${SE.floorPrem}`);
     lines.push('');
     if (SE.position) {
       const p = SE.position;
@@ -1642,10 +1691,13 @@ const server = http.createServer(async (req, res) => {
       autoLots:  body.autoLots  !== undefined ? body.autoLots : cur.autoLots,
       deployPct: body.deployPct ?? cur.deployPct,
       floorPrem: body.floorPremium ?? body.floorPrem ?? cur.floorPrem,
+      trendPts:       body.trendPts       ?? cur.trendPts,
+      trendOffsetMin: body.trendOffsetMin ?? cur.trendOffsetMin,
+      exitOffsetMin:  body.exitOffsetMin  ?? cur.exitOffsetMin,
     };
     seSaveDefaults(next);
     if (SE.active) Object.assign(SE, next);   // apply live, no need to stop/restart
-    lg(`[Straddle] Defaults updated: TP=${next.tp} SL=${next.sl} Vol=${next.volThr}× Deploy=${next.deployPct}% Floor=₹${next.floorPrem} Lots=${next.lots}`, 's');
+    lg(`[Straddle] Defaults updated: TP=${next.tp} SL=${next.sl} Vol=${next.volThr}× Trend=${next.trendPts}pt/${next.trendOffsetMin}min ExitCutoff=x+${next.exitOffsetMin} Deploy=${next.deployPct}% Floor=₹${next.floorPrem} Lots=${next.lots}`, 's');
     seSaveState();
     return ok({ ok: true, defaults: next });
   }
