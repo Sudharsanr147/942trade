@@ -32,6 +32,8 @@ const SLOTS_FILE  = '/home/ubuntu/engine-slots.json';
 const BT_LOG_FILE = '/home/ubuntu/bt-logs.json';   // daily BT simulation results
 const SE_STATE_FILE    = '/home/ubuntu/engine-se-state.json';    // straddle: today's position/trades/log
 const SE_DEFAULTS_FILE = '/home/ubuntu/engine-se-defaults.json'; // straddle: persisted default params (survives across days)
+const SE_BN_STATE_FILE    = '/home/ubuntu/engine-se-bn-state.json';
+const SE_BN_DEFAULTS_FILE = '/home/ubuntu/engine-se-bn-defaults.json';
 
 // ── Manual trade state ───────────────────────────────────
 const ST = {
@@ -667,9 +669,13 @@ function seStart(params = {}) {
   });
   // Enforce mutual exclusion here (not just in the HTTP route) so this also
   // applies on auto-start via token push, not only a manual toggle press.
+  // Only one of NIFTY straddle / BankNifty straddle / SR runs at a time.
   if (ST.srActive) {
     ST.srActive = false;
     lg('SR deactivated — straddle engine started', 'w');
+  }
+  if (SE_BN.active) {
+    seBnStop('NIFTY straddle activated');
   }
   saveState();
   seLg(`Straddle engine started — TP=${SE.tp}pt SL=${SE.sl}pt Vol≥${SE.volThr}×`, 's');
@@ -1031,6 +1037,515 @@ function seClosePosition() {
   SE.position = null;
   if (SE.monTimer) { clearInterval(SE.monTimer); SE.monTimer = null; }
   seLg(`Position closed. Trades today: ${SE.trades.length}`, 's');
+}
+
+// ══════════════════════════════════════════════════════════
+// BANKNIFTY STRADDLE ENGINE — separate parallel instance, same
+// logic as the NIFTY straddle engine above, with lot size 30 and
+// monthly-only expiry instead of 65 and weekly.
+// ══════════════════════════════════════════════════════════
+const SE_BN_FACTORY_DEFAULTS = {
+  tp: 8, sl: 4, volThr: 1.0, lots: 6, autoLots: true, deployPct: 95, floorPrem: 50,
+  trendPts: 10, trendOffsetMin: 2,   // trend filter: |spot - open[x-trendOffsetMin]| >= trendPts. trendPts:0 disables it.
+  exitOffsetMin: 4,   // hard time-exit at second 57 of candle (x + exitOffsetMin), x = the signal-check candle
+};
+
+const SE_BN = {
+  active:      false,   // master on/off (whether the loop is currently armed to trade)
+  tp:          SE_BN_FACTORY_DEFAULTS.tp,
+  sl:          SE_BN_FACTORY_DEFAULTS.sl,
+  volThr:      SE_BN_FACTORY_DEFAULTS.volThr,
+  lots:        SE_BN_FACTORY_DEFAULTS.lots,
+  autoLots:    SE_BN_FACTORY_DEFAULTS.autoLots,
+  deployPct:   SE_BN_FACTORY_DEFAULTS.deployPct,
+  floorPrem:   SE_BN_FACTORY_DEFAULTS.floorPrem,
+  trendPts:       SE_BN_FACTORY_DEFAULTS.trendPts,
+  trendOffsetMin: SE_BN_FACTORY_DEFAULTS.trendOffsetMin,
+  exitOffsetMin:  SE_BN_FACTORY_DEFAULTS.exitOffsetMin,
+  checkTimer:  null,    // setInterval for minute checks
+  monTimer:    null,    // setInterval for position monitor (500ms)
+  position:    null,    // active position {ceKey,peKey,entrySpot,ceClosed,peClosed,lots,tp,sl,exitDeadlineTs}
+  trades:      [],      // today's completed trades
+  log:         [],      // today's engine log lines
+  dateStr:     null,    // IST date (YYYY-MM-DD) this trades/log belong to
+  stoppedToday: false,  // true once user explicitly hits OFF — blocks auto-start for the rest of THIS date only
+};
+
+// IST calendar date as YYYY-MM-DD — the day boundary used for log/trade resets
+// ── Persist today's position/trades/log so a VM restart doesn't lose them ──
+function seBnSaveState() {
+  try {
+    fs.writeFileSync(SE_BN_STATE_FILE, JSON.stringify({
+      active: SE_BN.active, dateStr: SE_BN.dateStr, stoppedToday: SE_BN.stoppedToday,
+      tp: SE_BN.tp, sl: SE_BN.sl, volThr: SE_BN.volThr, lots: SE_BN.lots,
+      autoLots: SE_BN.autoLots, deployPct: SE_BN.deployPct, floorPrem: SE_BN.floorPrem,
+      trendPts: SE_BN.trendPts, trendOffsetMin: SE_BN.trendOffsetMin, exitOffsetMin: SE_BN.exitOffsetMin,
+      position: SE_BN.position, trades: SE_BN.trades, log: SE_BN.log,
+    }));
+  } catch(e) { console.error('seBnSaveState:', e.message); }
+}
+
+// ── Restore on boot. Same IST date → resume trades/log/position/active-scanning
+//    as-is. Different (or missing) date → fresh day, keep params only.
+function seBnLoadState() {
+  const today = seTodayStr();
+  try {
+    if (fs.existsSync(SE_BN_STATE_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(SE_BN_STATE_FILE, 'utf8'));
+      Object.assign(SE_BN, {
+        tp: saved.tp ?? SE_BN.tp, sl: saved.sl ?? SE_BN.sl, volThr: saved.volThr ?? SE_BN.volThr,
+        lots: saved.lots ?? SE_BN.lots, autoLots: saved.autoLots ?? SE_BN.autoLots,
+        deployPct: saved.deployPct ?? SE_BN.deployPct, floorPrem: saved.floorPrem ?? SE_BN.floorPrem,
+        trendPts: saved.trendPts ?? SE_BN.trendPts, trendOffsetMin: saved.trendOffsetMin ?? SE_BN.trendOffsetMin,
+        exitOffsetMin: saved.exitOffsetMin ?? SE_BN.exitOffsetMin,
+      });
+      if (saved.dateStr === today) {
+        SE_BN.dateStr      = today;
+        SE_BN.stoppedToday = !!saved.stoppedToday;
+        SE_BN.trades       = Array.isArray(saved.trades) ? saved.trades : [];
+        SE_BN.log          = Array.isArray(saved.log) ? saved.log : [];
+        SE_BN.position     = saved.position || null;
+        lg(`📂 [Straddle] Same-day state restored: ${SE_BN.trades.length} trade(s), position ${SE_BN.position ? 'OPEN' : 'none'}, wasActive=${!!saved.active}`, 'i');
+        if (saved.active && !SE_BN.stoppedToday) {
+          SE_BN.active = true;
+          seBnScheduleNextCheck();   // resume minute-boundary scanning regardless of position
+          if (SE_BN.position) {
+            // A position was live at crash time — resume monitoring it too.
+            seBnStartMonitor();
+            const msLeft = (SE_BN.position.exitDeadlineTs || 0) - Date.now();
+            if (msLeft > 0) {
+              setTimeout(() => seBnTimeExit(), msLeft);
+              lg(`⏱ [Straddle] Exit timer restored (${Math.floor(msLeft/1000)}s)`, 'i');
+            } else {
+              lg('⚠️ [Straddle] Exit time already passed during downtime — closing now', 'w');
+              seBnTimeExit();
+            }
+          }
+        }
+      } else {
+        // New day — fresh trades/log, but remember params.
+        SE_BN.dateStr = today; SE_BN.stoppedToday = false; SE_BN.trades = []; SE_BN.log = []; SE_BN.position = null;
+      }
+    } else {
+      SE_BN.dateStr = today;
+    }
+  } catch(e) {
+    console.error('seBnLoadState:', e.message);
+    SE_BN.dateStr = today;
+  }
+}
+
+// ── Persisted default params (separate from today's state — these are the
+//    baseline used every morning / every restart until the app pushes new ones) ──
+function seBnSaveDefaults(d) {
+  try { fs.writeFileSync(SE_BN_DEFAULTS_FILE, JSON.stringify(d)); } catch(e) { console.error('seBnSaveDefaults:', e.message); }
+}
+function seBnLoadDefaults() {
+  try {
+    if (fs.existsSync(SE_BN_DEFAULTS_FILE)) return { ...SE_BN_FACTORY_DEFAULTS, ...JSON.parse(fs.readFileSync(SE_BN_DEFAULTS_FILE, 'utf8')) };
+  } catch(e) { console.error('seBnLoadDefaults:', e.message); }
+  return { ...SE_BN_FACTORY_DEFAULTS };
+}
+
+function seBnLg(msg, type='i') {
+  const ts  = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'});
+  const line = `[${ts}] ${msg}`;
+  SE_BN.log.unshift(line);
+  if (SE_BN.log.length > 3000) SE_BN.log.pop();  // generous full-trading-day cap, resets to [] on day rollover
+  lg(`[Straddle] ${msg}`, type);
+  seBnSaveState();
+}
+
+function seBnIsMarket() {
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  return hhmm >= 9 * 60 + 20 && hhmm <= 15 * 60 + 25;
+}
+
+function seBnStart(params = {}) {
+  const today = seTodayStr();
+  if (SE_BN.dateStr !== today) { SE_BN.dateStr = today; SE_BN.trades = []; SE_BN.log = []; SE_BN.position = null; }
+  SE_BN.stoppedToday = false;   // explicit (or auto) start always clears today's manual-stop flag
+  if (SE_BN.active) { seBnLg('Already active', 'w'); return; }
+  Object.assign(SE_BN, {
+    active: true,
+    tp:        params.tp        || SE_BN.tp,
+    sl:        params.sl        || SE_BN.sl,
+    volThr:    params.volThr    || SE_BN.volThr,
+    lots:      params.lots      || SE_BN.lots,
+    autoLots:  params.autoLots  !== undefined ? params.autoLots : SE_BN.autoLots,
+    deployPct: params.deployPct || SE_BN.deployPct,
+    floorPrem: params.floorPrem || SE_BN.floorPrem,
+    trendPts:       params.trendPts       ?? SE_BN.trendPts,
+    trendOffsetMin: params.trendOffsetMin ?? SE_BN.trendOffsetMin,
+    exitOffsetMin:  params.exitOffsetMin  ?? SE_BN.exitOffsetMin,
+  });
+  // Enforce mutual exclusion here (not just in the HTTP route) so this also
+  // applies on auto-start via token push, not only a manual toggle press.
+  // Only one of NIFTY straddle / BankNifty straddle / SR runs at a time.
+  if (ST.srActive) {
+    ST.srActive = false;
+    lg('SR deactivated — straddle engine started', 'w');
+  }
+  if (SE.active) {
+    seStop('BankNifty straddle activated');
+  }
+  saveState();
+  seBnLg(`Straddle engine started — TP=${SE_BN.tp}pt SL=${SE_BN.sl}pt Vol≥${SE_BN.volThr}×`, 's');
+  seBnScheduleNextCheck();
+}
+
+function seBnStop(reason = 'Manual') {
+  SE_BN.active = false;
+  SE_BN.stoppedToday = true;   // blocks auto-resume (token re-push, VM restart) for the REST OF TODAY only
+  if (SE_BN.checkTimer) { clearTimeout(SE_BN.checkTimer); SE_BN.checkTimer = null; }
+  if (SE_BN.monTimer)   { clearInterval(SE_BN.monTimer);  SE_BN.monTimer   = null; }
+  seBnLg(`Straddle engine stopped (${reason})`, 'w');
+  // Note: SR is NOT auto-reactivated here anymore — SR is off by default now,
+  // same as straddle used to require an explicit ON. If you want SR running,
+  // turn it on explicitly from the SR tab.
+}
+
+// BankNifty straddle is opt-in EVERY day, same treatment as SR — it never
+// auto-starts on token push. This only rolls the day boundary over (fresh
+// trades/log, active reset to off) for the case where the VM stays up
+// overnight without restarting, so seBnLoadState()'s own day-check never
+// runs. Mirrors srResetIfNewDay(); NIFTY is the only strategy that's
+// on-by-default — see seAutoStartIfNeeded().
+function seBnResetIfNewDay() {
+  const today = seTodayStr();
+  if (SE_BN.dateStr !== today) {
+    SE_BN.dateStr = today; SE_BN.trades = []; SE_BN.log = [];
+    SE_BN.position = null; SE_BN.stoppedToday = false; SE_BN.active = false;
+    seBnSaveState();
+  }
+}
+
+function seBnScheduleNextCheck() {
+  if (!SE_BN.active) return;
+  // Fire at second 50 of each minute
+  const now  = new Date();
+  const secs = now.getSeconds();
+  const ms   = now.getMilliseconds();
+  const msTo50 = secs < 50
+    ? (50 - secs) * 1000 - ms
+    : (60 - secs + 50) * 1000 - ms;
+  SE_BN.checkTimer = setTimeout(async () => {
+    if (SE_BN.active) {
+      await seBnCheck();
+      seBnScheduleNextCheck();
+    }
+  }, msTo50);
+}
+
+async function seBnCheck() {
+  if (!SE_BN.active || SE_BN.position) return;
+  if (!ST.token) { seBnLg('No token — skip', 'w'); return; }
+  if (!seBnIsMarket()) { seBnLg('Outside market hours', 'i'); return; }
+
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = `${ist.getUTCHours()}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+  seBnLg(`Signal check at ${hhmm}`);
+
+  try {
+    // 1. Get NIFTY spot + prev candle range
+    const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+    if (!spot) { seBnLg('Spot unavailable', 'w'); return; }
+    seBnLg(`BANKNIFTY spot: ${spot}`);
+
+    // 1b. Trend filter — only proceed to the (expensive, 9-call) volume check
+    // if spot has also moved trendPts away from the open of the candle
+    // trendOffsetMin minutes ago. Selects for "there's a trend right now",
+    // not just a volume blip. trendPts:0 disables this gate entirely.
+    //
+    // "x-2" means: this check is evaluating minute X (right now, at :50
+    // seconds past its start) — the reference is the OPEN of minute X-2,
+    // i.e. two minutes before the start of the CURRENT minute, not two
+    // minutes before "now". Matched by actual candle timestamp, not by
+    // array position, so this can't silently drift if the API's ordering
+    // or inclusion of the still-forming candle ever changes.
+    if (SE_BN.trendPts > 0) {
+      const td = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%20Bank/1minute');
+      const tcandles = td?.data?.candles || [];
+      const xStartMs  = Math.floor(Date.now() / 60000) * 60000;         // start of minute X (IST and UTC minute boundaries coincide — 5:30 offset is a whole number of minutes)
+      const targetMs  = xStartMs - SE_BN.trendOffsetMin * 60000;            // start of minute X-trendOffsetMin
+      let refCandle = null, refTs = null;
+      for (const cnd of tcandles) {
+        const cndMs = new Date(cnd[0]).getTime();
+        if (Math.abs(cndMs - targetMs) < 30000) { refCandle = cnd; refTs = cnd[0]; break; }  // 30s tolerance for candle-boundary rounding
+      }
+      if (!refCandle) { seBnLg(`Trend filter: no candle found for x-${SE_BN.trendOffsetMin} (need more history, or market just opened) — skip`, 'w'); return; }
+      const refOpen = parseFloat(refCandle[1]);
+      const trendMove = spot - refOpen;
+      seBnLg(`Trend check: spot ${spot} vs open ${SE_BN.trendOffsetMin}min ago [${refTs}] = ${refOpen} → ${trendMove>=0?'+':''}${trendMove.toFixed(1)}pts (need ±${SE_BN.trendPts})`);
+      if (Math.abs(trendMove) < SE_BN.trendPts) {
+        seBnLg(`Trend ${Math.abs(trendMove).toFixed(1)} < ${SE_BN.trendPts} — no signal`);
+        return;
+      }
+      seBnLg(`✅ Trend confirmed: ${trendMove>=0?'+':''}${trendMove.toFixed(1)}pts vs ${SE_BN.trendOffsetMin}min ago`, 's');
+    }
+
+    // 2. Get weighted vol ratio across 9 stocks
+    const STOCKS = [
+      ['HDFCBANK',   'NSE_EQ%7CINE040A01034', 0.130],
+      ['RELIANCE',   'NSE_EQ%7CINE002A01018', 0.090],
+      ['ICICIBANK',  'NSE_EQ%7CINE090A01021', 0.080],
+      ['INFY',       'NSE_EQ%7CINE009A01021', 0.060],
+      ['TCS',        'NSE_EQ%7CINE467B01029', 0.050],
+      ['LT',         'NSE_EQ%7CINE018A01030', 0.040],
+      ['AXISBANK',   'NSE_EQ%7CINE238A01034', 0.040],
+      ['HINDUNILVR', 'NSE_EQ%7CINE030A01027', 0.030],
+      ['SBIN',       'NSE_EQ%7CINE062A01020', 0.030],
+    ];
+    let wVol = 0, totalW = 0;
+    const stockDetails = [];
+    for (const [sym, key, w] of STOCKS) {
+      try {
+        const cd = await upstox(`/v2/historical-candle/intraday/${key}/1minute`);
+        const candles = (cd?.data?.candles || []).reverse();
+        if (candles.length < 2) continue;
+        const curVol = parseFloat(candles[candles.length-1][5]) || 0;
+        const prior  = candles.slice(Math.max(0, candles.length-121), candles.length-1);
+        const avgVol = prior.length > 0
+          ? prior.reduce((s,c) => s + (parseFloat(c[5])||0), 0) / prior.length : 0;
+        const ratio  = avgVol > 0 ? curVol / avgVol : 1;
+        wVol += ratio * w; totalW += w;
+        stockDetails.push(`${sym} ${ratio.toFixed(2)}×`);
+        await sleep(120); // rate limit
+      } catch(_) {}
+    }
+    const wvr = totalW > 0 ? wVol / totalW : 0;
+    seBnLg(`Weighted vol ratio: ${wvr.toFixed(2)}× | threshold: ${SE_BN.volThr}×`);
+
+    if (wvr < SE_BN.volThr) { seBnLg(`Vol ${wvr.toFixed(2)} < ${SE_BN.volThr} — no signal`); return; }
+    seBnLg(`✅ VOL SURGE: ${wvr.toFixed(2)}× — entering straddle at next minute open!`, 's');
+    seBnLg(`   Per-stock: ${stockDetails.join(', ')}`, 'i');
+
+    // 3. Schedule entry at next minute open (~second 0)
+    const now2 = new Date();
+    const msToNext = (60 - now2.getSeconds()) * 1000 - now2.getMilliseconds() + 200;
+    setTimeout(() => seBnEnter(spot), msToNext);
+    seBnLg(`Entry in ${(msToNext/1000).toFixed(1)}s`, 'i');
+
+  } catch(e) { seBnLg('Check error: ' + e.message, 'e'); }
+}
+
+// Patches a confirmed fill price wherever the order actually lives right
+// now — the live position, or (if it already closed by the time the fill
+// confirmation comes back) the archived trade in SE_BN.trades. Decoupled from
+// timing on purpose: fill confirmation can take several seconds and must
+// never block entry/exit/monitoring.
+function seBnRecordFill(oid, field, price) {
+  if (price == null) return;
+  if (SE_BN.position && (SE_BN.position.ceOid === oid || SE_BN.position.peOid === oid)) {
+    SE_BN.position[field] = price;
+  }
+  const t = SE_BN.trades.find(x => x.ceOid === oid || x.peOid === oid);
+  if (t) t[field] = price;
+  seBnSaveState();
+}
+
+async function seBnEnter(signalSpot) {
+  if (!SE_BN.active || SE_BN.position) return;
+  try {
+    seBnLg('Placing straddle...', 'w');
+    // Fresh spot at entry
+    const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price) || signalSpot;
+    const atm  = Math.round(spot / 100) * 100;
+
+    // Auto-lots
+    let calcLots = SE_BN.lots;
+    if (SE_BN.autoLots) {
+      try {
+        const funds      = await getAvailableFunds();
+        const deployable = funds * SE_BN.deployPct / 100;
+        const expiry2    = await getLiveExpiry('BN');
+        const ce2        = await findInstrument(expiry2, atm, 'CE', 'BN');
+        const pe2        = await findInstrument(expiry2, atm, 'PE', 'BN');
+        const effCe      = (SE_BN.floorPrem > 0 && ce2.ltp < SE_BN.floorPrem) ? SE_BN.floorPrem : ce2.ltp;
+        const effPe      = (SE_BN.floorPrem > 0 && pe2.ltp < SE_BN.floorPrem) ? SE_BN.floorPrem : pe2.ltp;
+        const costPerLot = (effCe + effPe) * 30;
+        if (costPerLot > 0) {
+          calcLots = Math.max(1, Math.floor(deployable / costPerLot));
+          seBnLg(`💰 Balance ₹${funds.toFixed(0)} | ${SE_BN.deployPct}% → ₹${deployable.toFixed(0)} | cost/lot ₹${costPerLot.toFixed(0)} → ${calcLots} lots`, 's');
+        }
+      } catch(e) { seBnLg('Auto-lots failed: ' + e.message + ' — using ' + calcLots, 'w'); }
+    }
+
+    const expiry = await getLiveExpiry('BN');
+    const ce     = await findInstrument(expiry, atm, 'CE', 'BN');
+    const pe     = await findInstrument(expiry, atm, 'PE', 'BN');
+    const qty    = calcLots * 30;
+
+    seBnLg(`📐 Quoted premiums before order: CE ₹${ce.ltp} | PE ₹${pe.ltp}`, 'i');
+
+    const ceOid = await placeMarket(ce.key, 'BUY', qty, 'D', 30);
+    await sleep(400);
+    const peOid = await placeMarket(pe.key, 'BUY', qty, 'D', 30);
+
+    // Time exit: second 57 of candle (x + exitOffsetMin), x = the signal
+    // candle this entry came from — stored as an ABSOLUTE timestamp (not
+    // just a setTimeout) so a VM restart mid-position can recompute the
+    // remaining wait correctly instead of losing the deadline.
+    const now3 = new Date();
+    const extraMin = Math.max(0, SE_BN.exitOffsetMin - 2);   // exitOffsetMin=2 reproduces the original timing exactly
+    const msOut = (60 - now3.getSeconds() + 57) % 60 * 1000 + 60000 + 200 + extraMin * 60000;
+    const exitDeadlineTs = Date.now() + msOut;
+
+    SE_BN.position = {
+      ceKey: ce.key, peKey: pe.key,
+      entrySpot: spot, entryTime: new Date().toISOString(),
+      lots: calcLots, tp: SE_BN.tp, sl: SE_BN.sl,
+      ceClosed: false, peClosed: false,
+      ceOid, peOid, exitDeadlineTs,
+      ceQuotedPrice: ce.ltp, peQuotedPrice: pe.ltp,   // pre-order LTP (indicative)
+      ceEntryPrice: null, peEntryPrice: null,         // filled in below once confirmed
+      ceExitPrice: null, peExitPrice: null,
+    };
+    seBnLg(`✅ ENTERED: ${atm}CE (order ${ceOid}) + ${atm}PE (order ${peOid}) × ${calcLots} lots @ spot ${spot}`, 's');
+    seBnLg(`TP: spot ±${SE_BN.tp}pts | SL: spot ±${SE_BN.sl}pts`, 'i');
+
+    // Confirm ACTUAL fill prices from the broker, in the background — this
+    // must not delay seBnStartMonitor()/the exit timer below, since the whole
+    // strategy depends on watching the position within milliseconds of entry.
+    (async () => {
+      const [ceFill, peFill] = await Promise.all([
+        waitFill(ceOid).catch(e => { seBnLg(`CE fill confirm failed: ${e.message}`, 'w'); return null; }),
+        waitFill(peOid).catch(e => { seBnLg(`PE fill confirm failed: ${e.message}`, 'w'); return null; }),
+      ]);
+      seBnRecordFill(ceOid, 'ceEntryPrice', ceFill);
+      seBnRecordFill(peOid, 'peEntryPrice', peFill);
+      seBnLg(`📋 Entry fills confirmed: CE ₹${ceFill ?? '?'} | PE ₹${peFill ?? '?'}`, 'i');
+    })();
+
+    // Start 500ms monitor
+    seBnStartMonitor();
+    setTimeout(() => seBnTimeExit(), msOut);
+    seBnLg(`Time exit in ${(msOut/1000).toFixed(0)}s`, 'i');
+
+  } catch(e) { seBnLg('Entry error: ' + e.message, 'e'); }
+}
+
+function seBnStartMonitor() {
+  if (SE_BN.monTimer) clearInterval(SE_BN.monTimer);
+  SE_BN.monTimer = setInterval(async () => {
+    if (!SE_BN.position) { clearInterval(SE_BN.monTimer); SE_BN.monTimer = null; return; }
+    if (SE_BN.position.ceClosed && SE_BN.position.peClosed) {
+      clearInterval(SE_BN.monTimer); SE_BN.monTimer = null;
+      seBnClosePosition(); return;
+    }
+    try {
+      const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+      const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+      if (!spot) return;
+      const entry  = SE_BN.position.entrySpot;
+      const upMove = spot - entry;
+      const dnMove = entry - spot;
+      const tp = SE_BN.position.tp, sl = SE_BN.position.sl;
+      // CE leg
+      if (!SE_BN.position.ceClosed) {
+        if (upMove >= tp) {
+          seBnLg(`🎯 CE TP! spot=${spot} (+${upMove.toFixed(1)}pt)`, 's');
+          await seBnCloseLeg('CE', 'TP', spot);
+        } else if (dnMove >= sl) {
+          seBnLg(`⛔ CE SL! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 'e');
+          await seBnCloseLeg('CE', 'SL', spot);
+        }
+      }
+      // PE leg
+      if (!SE_BN.position.peClosed) {
+        if (dnMove >= tp) {
+          seBnLg(`🎯 PE TP! spot=${spot} (-${dnMove.toFixed(1)}pt)`, 's');
+          await seBnCloseLeg('PE', 'TP', spot);
+        } else if (upMove >= sl) {
+          seBnLg(`⛔ PE SL! spot=${spot} (+${upMove.toFixed(1)}pt)`, 'e');
+          await seBnCloseLeg('PE', 'SL', spot);
+        }
+      }
+    } catch(_) {}
+  }, 500);
+}
+
+async function seBnCloseLeg(leg, reason, closeSpot) {
+  if (!SE_BN.position) return;
+  const key = leg === 'CE' ? SE_BN.position.ceKey : SE_BN.position.peKey;
+  try {
+    const qty    = SE_BN.position.lots * 30;
+    const oid    = await placeMarket(key, 'SELL', qty, 'D', 30);
+    const tp     = SE_BN.position.tp;
+    const sl     = SE_BN.position.sl;
+    const DELTA  = 0.5;
+    const LOT    = 30;
+    // P&L per lot in option pts then rupees
+    // TP hit → gained tp×delta opt pts | SL hit → lost sl×delta opt pts
+    // Time exit → use actual spot move
+    let optPnlPts;
+    if (reason === 'TP') {
+      optPnlPts = tp * DELTA;
+    } else if (reason === 'SL') {
+      optPnlPts = -(sl * DELTA);
+    } else {
+      // Time exit — estimate from spot move
+      const entry = SE_BN.position.entrySpot;
+      const move  = leg === 'CE' ? (closeSpot - entry) : (entry - closeSpot);
+      optPnlPts = Math.max(-(sl * DELTA), Math.min(tp * DELTA, move * DELTA));
+    }
+    const pnlRs = optPnlPts * LOT * SE_BN.position.lots;
+
+    if (leg === 'CE') {
+      SE_BN.position.ceClosed    = true;
+      SE_BN.position.ceReason    = reason || 'TIME';
+      SE_BN.position.cePnlPts    = optPnlPts;
+      SE_BN.position.cePnlRs     = pnlRs;
+      SE_BN.position.ceCloseSpot = closeSpot;
+    } else {
+      SE_BN.position.peClosed    = true;
+      SE_BN.position.peReason    = reason || 'TIME';
+      SE_BN.position.pePnlPts    = optPnlPts;
+      SE_BN.position.pePnlRs     = pnlRs;
+      SE_BN.position.peCloseSpot = closeSpot;
+    }
+    seBnLg(`${leg} closed (${reason||'TIME'}): order ${oid} | P&L (est): ${optPnlPts > 0 ? '+' : ''}${optPnlPts.toFixed(2)} opt pts = ₹${pnlRs > 0 ? '+' : ''}${pnlRs.toFixed(0)}`, reason==='TP'?'s':'w');
+
+    // Confirm the ACTUAL sell fill price in the background — doesn't block
+    // seBnClosePosition()/the next scan, which must stay fast.
+    (async () => {
+      try {
+        const fill = await waitFill(oid);
+        seBnRecordFill(oid, leg === 'CE' ? 'ceExitPrice' : 'peExitPrice', fill);
+        seBnLg(`📋 ${leg} exit fill confirmed: ₹${fill}`, 'i');
+      } catch(e) { seBnLg(`${leg} exit fill confirm failed: ${e.message}`, 'w'); }
+    })();
+  } catch(e) { seBnLg(`${leg} close error: ${e.message}`, 'e'); }
+}
+
+async function seBnTimeExit() {
+  if (!SE_BN.position) return;
+  seBnLg('⏱ Time exit — closing open legs', 'w');
+  const sd   = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank').catch(()=>null);
+  const spot = sd ? parseFloat(Object.values(sd?.data||{})[0]?.last_price) : SE_BN.position.entrySpot;
+  if (!SE_BN.position.ceClosed) await seBnCloseLeg('CE', 'TIME', spot);
+  await sleep(400);
+  if (!SE_BN.position.peClosed) await seBnCloseLeg('PE', 'TIME', spot);
+  setTimeout(() => seBnClosePosition(), 1500);
+}
+
+function seBnClosePosition() {
+  if (!SE_BN.position) return;
+  const cePnl   = SE_BN.position.cePnlRs || 0;
+  const pePnl   = SE_BN.position.pePnlRs || 0;
+  const totalRs = cePnl + pePnl - 100; // deduct ₹100 txcost
+  const totalPts= (SE_BN.position.cePnlPts||0) + (SE_BN.position.pePnlPts||0);
+  SE_BN.position.totalPnlRs  = totalRs;
+  SE_BN.position.totalPnlPts = totalPts;
+  seBnLg(`Trade P&L: CE${cePnl>=0?'+':''}₹${cePnl.toFixed(0)} + PE${pePnl>=0?'+':''}₹${pePnl.toFixed(0)} - ₹100 txcost = ${totalRs>=0?'+':''}₹${totalRs.toFixed(0)}`, totalRs>=0?'s':'e');
+  SE_BN.trades.unshift({ ...SE_BN.position, closeTime: new Date().toISOString() });
+  if (SE_BN.trades.length > 300) SE_BN.trades.pop();
+  SE_BN.position = null;
+  if (SE_BN.monTimer) { clearInterval(SE_BN.monTimer); SE_BN.monTimer = null; }
+  seBnLg(`Position closed. Trades today: ${SE_BN.trades.length}`, 's');
 }
 
 
@@ -1572,6 +2087,9 @@ const server = http.createServer(async (req, res) => {
     if (ST.srActive && SE.active) {
       seStop('SR activated');   // enforce mutual exclusion the other direction too
     }
+    if (ST.srActive && SE_BN.active) {
+      seBnStop('SR activated');
+    }
     if (ST.srActive) {
       // Arm the roster NOW. Without this, a roster pushed while SR was off
       // (the normal case now that off is the default) would stay un-armed
@@ -1720,6 +2238,138 @@ const server = http.createServer(async (req, res) => {
     } catch(e) { return ok({ ok: false, error: e.message }); }
   }
 
+  // ══ BANKNIFTY STRADDLE ROUTES (mirror of above, /bn/ prefixed) ══
+  // ── POST /engine/straddle/start ─────────────────────────
+  if (p === '/engine/straddle/bn/start' && req.method === 'POST') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    const d = seBnLoadDefaults();
+    seBnStart({
+      tp:        body.tp        || d.tp,
+      sl:        body.sl        || d.sl,
+      volThr:    body.volThr    || d.volThr,
+      lots:      body.lots      || d.lots,
+      autoLots:  body.autoLots  !== undefined ? body.autoLots : d.autoLots,
+      deployPct: body.deployPct || d.deployPct,
+      floorPrem: body.floorPremium || d.floorPrem,
+      trendPts:       body.trendPts       ?? d.trendPts,
+      trendOffsetMin: body.trendOffsetMin ?? d.trendOffsetMin,
+      exitOffsetMin:  body.exitOffsetMin  ?? d.exitOffsetMin,
+    });
+    return ok({ ok: true, message: 'Straddle engine started on VM' });
+  }
+
+  // ── POST /engine/straddle/stop ──────────────────────────
+  if (p === '/engine/straddle/bn/stop' && req.method === 'POST') {
+    seBnStop('Manual — user toggle');
+    return ok({ ok: true, message: 'Straddle engine stopped for the rest of today. SR stays off unless you turn it on.' });
+  }
+
+  // ── GET /engine/straddle/status ─────────────────────────
+  // Returns the FULL day's trades + log (9:15–15:30, or however much has
+  // happened so far) — the app renders whatever it gets, no truncation here.
+  if (p === '/engine/straddle/bn/status' && req.method === 'GET') {
+    return ok({
+      ok: true,
+      active:       SE_BN.active,
+      stoppedToday: SE_BN.stoppedToday,
+      dateStr:      SE_BN.dateStr,
+      position:     SE_BN.position,
+      trades:       SE_BN.trades,
+      log:          SE_BN.log,
+      params:   { tp: SE_BN.tp, sl: SE_BN.sl, volThr: SE_BN.volThr, lots: SE_BN.lots,
+                  autoLots: SE_BN.autoLots, deployPct: SE_BN.deployPct, floorPrem: SE_BN.floorPrem,
+                  trendPts: SE_BN.trendPts, trendOffsetMin: SE_BN.trendOffsetMin, exitOffsetMin: SE_BN.exitOffsetMin },
+    });
+  }
+
+  // ── GET /engine/straddle/report ─────────────────────────
+  // Plain-text version of the same data — readable straight in a terminal,
+  // no jq/python needed: curl -s http://localhost:8081/engine/straddle/report
+  if (p === '/engine/straddle/bn/report' && req.method === 'GET') {
+    const lines = [];
+    lines.push(`942 Trade — Straddle report — ${SE_BN.dateStr || seTodayStr()}`);
+    lines.push(`Active: ${SE_BN.active} | Stopped by user today: ${SE_BN.stoppedToday}`);
+    lines.push(`Params: TP=${SE_BN.tp}pt SL=${SE_BN.sl}pt Vol>=${SE_BN.volThr}x Trend>=${SE_BN.trendPts}pt/${SE_BN.trendOffsetMin}min ExitCutoff=x+${SE_BN.exitOffsetMin} Lots=${SE_BN.lots}${SE_BN.autoLots?' (auto)':''} Deploy=${SE_BN.deployPct}% Floor=Rs${SE_BN.floorPrem}`);
+    lines.push('');
+    if (SE_BN.position) {
+      const p = SE_BN.position;
+      lines.push(`OPEN POSITION: entry ${p.entryTime} | spot ${p.entrySpot} | ${p.lots} lots`);
+      lines.push(`  CE: quoted Rs${p.ceQuotedPrice ?? '?'} | entry fill Rs${p.ceEntryPrice ?? 'pending'} | ${p.ceClosed ? 'closed ('+p.ceReason+') exit Rs'+(p.ceExitPrice ?? 'pending') : 'still open'}`);
+      lines.push(`  PE: quoted Rs${p.peQuotedPrice ?? '?'} | entry fill Rs${p.peEntryPrice ?? 'pending'} | ${p.peClosed ? 'closed ('+p.peReason+') exit Rs'+(p.peExitPrice ?? 'pending') : 'still open'}`);
+      lines.push('');
+    }
+    lines.push(`=== TRADES (${SE_BN.trades.length}) ===`);
+    if (!SE_BN.trades.length) lines.push('(none yet today)');
+    SE_BN.trades.slice().reverse().forEach((t, i) => {
+      lines.push(`#${i+1}  entry ${t.entryTime}  spot ${t.entrySpot}  ${t.lots} lots  ->  close ${t.closeTime || '?'}`);
+      lines.push(`  CE: quoted Rs${t.ceQuotedPrice ?? '?'} -> entry Rs${t.ceEntryPrice ?? '?'} -> exit Rs${t.ceExitPrice ?? '?'}  [${t.ceReason || '?'}]  est P&L Rs${(t.cePnlRs ?? 0).toFixed(0)}`);
+      lines.push(`  PE: quoted Rs${t.peQuotedPrice ?? '?'} -> entry Rs${t.peEntryPrice ?? '?'} -> exit Rs${t.peExitPrice ?? '?'}  [${t.peReason || '?'}]  est P&L Rs${(t.pePnlRs ?? 0).toFixed(0)}`);
+      lines.push(`  TOTAL (after Rs100 txcost): Rs${(t.totalPnlRs ?? 0).toFixed(0)}`);
+      lines.push('');
+    });
+    lines.push(`=== FULL LOG (${SE_BN.log.length} lines, chronological) ===`);
+    SE_BN.log.slice().reverse().forEach(l => lines.push(l));
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end(lines.join('\n'));
+    return;
+  }
+
+
+  if (p === '/engine/straddle/bn/exit' && req.method === 'POST') {
+    if (!SE_BN.position) return ok({ ok: false, error: 'No open position' });
+    await seBnTimeExit();
+    return ok({ ok: true, message: 'Manual exit triggered' });
+  }
+
+  // ── GET /engine/straddle/defaults ───────────────────────
+  // The persisted baseline params — app reads this on load to pre-fill fields.
+  if (p === '/engine/straddle/bn/defaults' && req.method === 'GET') {
+    return ok({ ok: true, defaults: seBnLoadDefaults() });
+  }
+
+  // ── POST /engine/straddle/defaults ──────────────────────
+  // "Update" button: saves these as the new baseline for every future
+  // start (today's remaining auto-resumes, and every day after). Also
+  // applies live immediately if the engine is currently running.
+  if (p === '/engine/straddle/bn/defaults' && req.method === 'POST') {
+    const cur = seBnLoadDefaults();
+    const next = {
+      tp:        body.tp        ?? cur.tp,
+      sl:        body.sl        ?? cur.sl,
+      volThr:    body.volThr    ?? cur.volThr,
+      lots:      body.lots      ?? cur.lots,
+      autoLots:  body.autoLots  !== undefined ? body.autoLots : cur.autoLots,
+      deployPct: body.deployPct ?? cur.deployPct,
+      floorPrem: body.floorPremium ?? body.floorPrem ?? cur.floorPrem,
+      trendPts:       body.trendPts       ?? cur.trendPts,
+      trendOffsetMin: body.trendOffsetMin ?? cur.trendOffsetMin,
+      exitOffsetMin:  body.exitOffsetMin  ?? cur.exitOffsetMin,
+    };
+    seBnSaveDefaults(next);
+    if (SE_BN.active) Object.assign(SE_BN, next);   // apply live, no need to stop/restart
+    lg(`[Straddle] Defaults updated: TP=${next.tp} SL=${next.sl} Vol=${next.volThr}× Trend=${next.trendPts}pt/${next.trendOffsetMin}min ExitCutoff=x+${next.exitOffsetMin} Deploy=${next.deployPct}% Floor=₹${next.floorPrem} Lots=${next.lots}`, 's');
+    seBnSaveState();
+    return ok({ ok: true, defaults: next });
+  }
+
+  // ── GET /engine/straddle/spot ────────────────────────────
+  if (p === '/engine/straddle/bn/spot' && req.method === 'GET') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    try {
+      const d = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+      const spot = parseFloat(Object.values(d?.data||{})[0]?.last_price);
+      if (!spot) return ok({ ok: false, error: 'Spot unavailable' });
+      const cd = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%20Bank/1minute');
+      const candles = cd?.data?.candles || [];
+      let range = 0;
+      if (candles.length >= 2) {
+        const prev = candles[candles.length - 2];
+        range = parseFloat((prev[2] - prev[3]).toFixed(2));
+      }
+      return ok({ ok: true, spot, range });
+    } catch(e) { return ok({ ok: false, error: e.message }); }
+  }
+
   // ── GET /engine/straddle/volcheck ───────────────────────
   if (p === '/engine/straddle/volcheck' && req.method === 'GET') {
     if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
@@ -1840,9 +2490,12 @@ const server = http.createServer(async (req, res) => {
     autoStartTickCollector();
     // SR resets to off (its default) on a new day even if the process never restarted
     srResetIfNewDay();
-    // Always-on straddle: resume automatically unless user turned it off today
+    // BankNifty straddle is opt-in every day too — same reasoning as SR
+    seBnResetIfNewDay();
+    // Always-on straddle: NIFTY resumes automatically unless user turned it off today
     seAutoStartIfNeeded();
-    return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday, srActive: ST.srActive });
+    return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday,
+                straddleBnActive: SE_BN.active, straddleBnStoppedToday: SE_BN.stoppedToday, srActive: ST.srActive });
   }
 
   // ── POST /engine/arm (manual) ───────────────────────────
@@ -2272,6 +2925,7 @@ server.listen(PORT, '0.0.0.0', () => {
   loadState();
   loadSlots();
   seLoadState();
+  seBnLoadState();
   btScheduleDailyRun();
   lg('BT daily scheduler started (fires at 15:32 IST)', 'i');
 });

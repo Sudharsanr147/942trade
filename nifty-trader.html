@@ -374,7 +374,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
     <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px;display:flex;align-items:center;gap:8px">
-      <span>v6.8 · 23-Jul-2026</span>
+      <span>v7.1 · 23-Jul-2026</span>
       <span id="hard-refresh-btn" onclick="hardRefreshApp()"
         title="Hard refresh — reload latest version from GitHub. Keeps your token and settings."
         style="cursor:pointer;color:var(--blue);font-size:13px;line-height:1;padding:2px 3px;
@@ -559,91 +559,6 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- ┌─────────────────────────────────────────────┐
        │  MONITOR TAB                                │
        └─────────────────────────────────────────────┘ -->
-  <div class="tab" id="t-monitor">
-
-    <!-- Active proxy indicator -->
-    <div style="text-align:center;margin-bottom:10px;font-family:var(--mono);font-size:10px;color:var(--dim)">
-      PROXY: <span id="proxy-ind" style="color:var(--blue)">—</span>
-    </div>
-
-    <!-- Status + Instrument row -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div>
-        <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">STATUS</div>
-        <span class="badge b-idle" id="status-badge">IDLE</span>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">INSTRUMENT</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--blue)" id="instr-lbl">—</div>
-      </div>
-    </div>
-
-    <!-- Direction indicator row -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:8px 12px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r)">
-      <span style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase">Direction</span>
-      <span id="dir-ind" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--dim)">Not set</span>
-    </div>
-
-    <!-- Countdown -->
-    <div class="card">
-      <div class="ct-wrap">
-        <div class="ct-time" id="cdown">--:--:--</div>
-        <div class="ct-lbl"  id="cdown-lbl">NOT ARMED</div>
-      </div>
-    </div>
-
-    <!-- Price stats -->
-    <div class="sgrid">
-      <div class="sbox"><div class="sl">NIFTY Spot</div><div class="sv b" id="spot">—</div></div>
-      <div class="sbox"><div class="sl">Option LTP</div><div class="sv"   id="opt-ltp">—</div></div>
-      <div class="sbox"><div class="sl">Entry Price</div><div class="sv a" id="entry-px">—</div></div>
-      <div class="sbox"><div class="sl">P&amp;L</div><div class="sv d" id="pnl">—</div></div>
-    </div>
-
-    <!-- SL / Target card (shown after fill) -->
-    <div class="card" id="sltgt-card" style="display:none">
-      <div class="cr">
-        <span class="cr-l">Stop Loss at</span>
-        <span class="cr-v" style="color:var(--red)"   id="sl-level">—</span>
-      </div>
-      <div class="cr">
-        <span class="cr-l">Target at</span>
-        <span class="cr-v" style="color:var(--green)" id="tgt-level">—</span>
-      </div>
-      <div class="cr">
-        <span class="cr-l">Quantity</span>
-        <span class="cr-v" id="qty-lbl">—</span>
-      </div>
-    </div>
-
-    <!-- Fire Now: visible when armed and waiting for entry time -->
-    <div id="area-fire" style="display:none">
-      <button class="btn btn-amber" onclick="fireNow()">⚡ FIRE ENTRY NOW</button>
-    </div>
-
-    <!-- Direction prompt: visible when entry time hit but no direction set -->
-    <div id="area-dir" style="display:none">
-      <div style="text-align:center;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;letter-spacing:.03em">
-        ⚡ ENTRY TIME — PICK DIRECTION NOW
-      </div>
-      <div class="drow" style="margin-bottom:0">
-        <div class="dbtn" onclick="pickDirMonitor('CE')">BUY CE <small>📈 BULLISH</small></div>
-        <div class="dbtn" onclick="pickDirMonitor('PE')">BUY PE <small>📉 BEARISH</small></div>
-      </div>
-    </div>
-
-    <!-- Action buttons -->
-    <div id="area-confirm" style="display:none">
-      <button class="btn btn-green pulse-g" id="btn-confirm" onclick="confirmTrade()">✅ CONFIRM TRADE</button>
-    </div>
-    <div id="area-sqoff" style="display:none">
-      <button class="btn btn-red" id="btn-sqoff" onclick="manualSqOff()">🛑 SQUARE OFF NOW</button>
-    </div>
-    <div id="area-goto">
-      <button class="btn btn-ghost btn-sm" onclick="go('strategy')">← Go to Strategy to arm</button>
-    </div>
-
-  </div>
 
   <!-- ┌─────────────────────────────────────────────┐
        │  AUTO STRATEGY TAB                          │
@@ -827,35 +742,6 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
 
   </div>
-  <div class="tab" id="t-tradelog">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div>
-        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Trade Logs</div>
-        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="tl-storage-info">90-day retention · auto-captured</div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button onclick="exportTradeLogs()"
-          style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.2);color:var(--blue);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
-          ↓ Export
-        </button>
-        <button onclick="clearTodayLogs()"
-          style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);color:var(--amber);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer"
-          title="Clear only today's entries">
-          Clear Today
-        </button>
-        <button onclick="clearTradeLogs()"
-          style="background:none;border:1px solid var(--bdr);color:var(--dim);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer"
-          title="Clear all trade logs">
-          Clear All
-        </button>
-      </div>
-    </div>
-    <div id="tl-list">
-      <div style="text-align:center;padding:32px;color:var(--dim);font-size:12px">
-        No trade logs yet.<br>Logs are captured automatically when slots execute.
-      </div>
-    </div>
-  </div>
 
 
   <!-- ┌─────────────────────────────────────────────┐
@@ -880,14 +766,24 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <!-- Sub-tab switcher -->
   <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden">
     <button id="subtab-replay-btn" onclick="switchSubTab('replay')"
-      style="flex:1;padding:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;
+      style="flex:1;padding:7px;font-size:10px;font-weight:600;cursor:pointer;border:none;
              background:var(--blue);color:#fff" >
       ▶ Replay
     </button>
     <button id="subtab-test-btn" onclick="switchSubTab('test')"
-      style="flex:1;padding:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;
+      style="flex:1;padding:7px;font-size:10px;font-weight:600;cursor:pointer;border:none;
              background:var(--s2);color:var(--dim)">
-      🔬 Live Test
+      🔬 Test
+    </button>
+    <button id="subtab-monitor-btn" onclick="switchSubTab('monitor')"
+      style="flex:1;padding:7px;font-size:10px;font-weight:600;cursor:pointer;border:none;
+             background:var(--s2);color:var(--dim)">
+      📟 Monitor
+    </button>
+    <button id="subtab-trades-btn" onclick="switchSubTab('trades')"
+      style="flex:1;padding:7px;font-size:10px;font-weight:600;cursor:pointer;border:none;
+             background:var(--s2);color:var(--dim)">
+      📋 Trades
     </button>
   </div>
 
@@ -982,6 +878,123 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     </div>
   </div> <!-- end subtab-test -->
 
+
+  <div id="subtab-monitor" style="display:none">
+
+    <!-- Active proxy indicator -->
+    <div style="text-align:center;margin-bottom:10px;font-family:var(--mono);font-size:10px;color:var(--dim)">
+      PROXY: <span id="proxy-ind" style="color:var(--blue)">—</span>
+    </div>
+
+    <!-- Status + Instrument row -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">STATUS</div>
+        <span class="badge b-idle" id="status-badge">IDLE</span>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">INSTRUMENT</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--blue)" id="instr-lbl">—</div>
+      </div>
+    </div>
+
+    <!-- Direction indicator row -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:8px 12px;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r)">
+      <span style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase">Direction</span>
+      <span id="dir-ind" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--dim)">Not set</span>
+    </div>
+
+    <!-- Countdown -->
+    <div class="card">
+      <div class="ct-wrap">
+        <div class="ct-time" id="cdown">--:--:--</div>
+        <div class="ct-lbl"  id="cdown-lbl">NOT ARMED</div>
+      </div>
+    </div>
+
+    <!-- Price stats -->
+    <div class="sgrid">
+      <div class="sbox"><div class="sl">NIFTY Spot</div><div class="sv b" id="spot">—</div></div>
+      <div class="sbox"><div class="sl">Option LTP</div><div class="sv"   id="opt-ltp">—</div></div>
+      <div class="sbox"><div class="sl">Entry Price</div><div class="sv a" id="entry-px">—</div></div>
+      <div class="sbox"><div class="sl">P&amp;L</div><div class="sv d" id="pnl">—</div></div>
+    </div>
+
+    <!-- SL / Target card (shown after fill) -->
+    <div class="card" id="sltgt-card" style="display:none">
+      <div class="cr">
+        <span class="cr-l">Stop Loss at</span>
+        <span class="cr-v" style="color:var(--red)"   id="sl-level">—</span>
+      </div>
+      <div class="cr">
+        <span class="cr-l">Target at</span>
+        <span class="cr-v" style="color:var(--green)" id="tgt-level">—</span>
+      </div>
+      <div class="cr">
+        <span class="cr-l">Quantity</span>
+        <span class="cr-v" id="qty-lbl">—</span>
+      </div>
+    </div>
+
+    <!-- Fire Now: visible when armed and waiting for entry time -->
+    <div id="area-fire" style="display:none">
+      <button class="btn btn-amber" onclick="fireNow()">⚡ FIRE ENTRY NOW</button>
+    </div>
+
+    <!-- Direction prompt: visible when entry time hit but no direction set -->
+    <div id="area-dir" style="display:none">
+      <div style="text-align:center;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;letter-spacing:.03em">
+        ⚡ ENTRY TIME — PICK DIRECTION NOW
+      </div>
+      <div class="drow" style="margin-bottom:0">
+        <div class="dbtn" onclick="pickDirMonitor('CE')">BUY CE <small>📈 BULLISH</small></div>
+        <div class="dbtn" onclick="pickDirMonitor('PE')">BUY PE <small>📉 BEARISH</small></div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div id="area-confirm" style="display:none">
+      <button class="btn btn-green pulse-g" id="btn-confirm" onclick="confirmTrade()">✅ CONFIRM TRADE</button>
+    </div>
+    <div id="area-sqoff" style="display:none">
+      <button class="btn btn-red" id="btn-sqoff" onclick="manualSqOff()">🛑 SQUARE OFF NOW</button>
+    </div>
+    <div id="area-goto">
+      <button class="btn btn-ghost btn-sm" onclick="go('strategy')">← Go to Strategy to arm</button>
+    </div>
+
+  </div>
+
+  <div id="subtab-trades" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Trade Logs</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px" id="tl-storage-info">90-day retention · auto-captured</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="exportTradeLogs()"
+          style="background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.2);color:var(--blue);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer">
+          ↓ Export
+        </button>
+        <button onclick="clearTodayLogs()"
+          style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);color:var(--amber);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer"
+          title="Clear only today's entries">
+          Clear Today
+        </button>
+        <button onclick="clearTradeLogs()"
+          style="background:none;border:1px solid var(--bdr);color:var(--dim);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer"
+          title="Clear all trade logs">
+          Clear All
+        </button>
+      </div>
+    </div>
+    <div id="tl-list">
+      <div style="text-align:center;padding:32px;color:var(--dim);font-size:12px">
+        No trade logs yet.<br>Logs are captured automatically when slots execute.
+      </div>
+    </div>
+  </div>
+
 </div><!-- end t-bt tab -->
 
   <!-- ═══════════════════════════════════════════════════ -->
@@ -996,7 +1009,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           Straddle Engine
         </div>
         <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="str-subtitle">
-          Vol surge detector · buys CE+PE · always-on with your token, like SR
+          Vol surge detector · buys CE+PE · always-on by default, turns off BankNifty + SR
         </div>
       </div>
       <!-- Master ON/OFF -->
@@ -1139,6 +1152,158 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
   </div><!-- /#t-straddle -->
 
+  <div class="tab" id="t-straddle-bn">
+    <div style="color:#ffffff;font-size:16px;font-weight:bold;padding:12px">⚡ BANKNIFTY STRADDLE ENGINE</div>
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#aabbcc">
+          Straddle Engine — BankNifty
+        </div>
+        <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="str-bn-subtitle">
+          Vol surge detector · buys CE+PE · lot 30, monthly expiry · manual each day, turns off NIFTY + SR
+        </div>
+      </div>
+      <!-- Master ON/OFF -->
+      <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+        <input type="checkbox" id="str-bn-master-toggle" onchange="strBnMasterToggle(this.checked)"
+          style="opacity:0;width:0;height:0">
+        <span id="str-bn-toggle-track" style="position:absolute;top:0;left:0;right:0;bottom:0;
+          background:#0f1923;border:1px solid #2a3f55;border-radius:24px;transition:.3s">
+          <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;
+            background:var(--dim);border-radius:50%;transition:.3s" id="str-bn-toggle-knob"></span>
+        </span>
+      </label>
+    </div>
+
+    <!-- Status bar -->
+    <div id="str-bn-status-bar" style="background:#1a2535;border:1px solid #2a3f55;
+         border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px">
+      <div style="color:#aabbcc">Toggle ON to activate straddle engine</div>
+    </div>
+
+    <!-- Params -->
+    <div style="background:#1a2535;border:1px solid #2a3f55;border-radius:8px;
+         padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+           color:#aabbcc;margin-bottom:8px">Parameters</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px"
+           oninput="strBnMarkParamsDirty()" onchange="strBnMarkParamsDirty()">
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">TP (spot pts)</div>
+          <input id="str-bn-tp" type="number" value="8" min="3" max="20" step="0.5"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">SL (spot pts)</div>
+          <input id="str-bn-sl" type="number" value="4" min="1" max="10" step="0.5"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Vol threshold (×avg)</div>
+          <input id="str-bn-vol" type="number" value="1" min="0.5" max="5" step="0.5"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Lots (manual fallback)</div>
+          <input id="str-bn-lots" type="number" value="6" min="1" max="50" step="1"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Trend filter (index pts)</div>
+          <input id="str-bn-trend-pts" type="number" value="10" min="0" max="100" step="1"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">...vs open N min ago</div>
+          <input id="str-bn-trend-offset" type="number" value="2" min="1" max="30" step="1"
+            oninput="updateBnTrendExample()"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div id="str-bn-trend-example" style="grid-column:1/-1;font-size:10px;color:#79c0ff;margin-top:-4px"></div>
+        <div style="grid-column:1/-1;font-size:10px;color:#aabbcc;margin-top:-2px">
+          Only signals when spot has ALSO moved this many points vs N minutes ago. Set points to 0 to disable.
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Exit hard cutoff (min after signal)</div>
+          <input id="str-bn-exit-offset" type="number" value="4" min="2" max="30" step="1"
+            oninput="updateBnExitExample()"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div style="display:flex;align-items:flex-end;font-size:10px;color:#aabbcc;padding-bottom:6px">
+          Entry is always signal+1min. This sets how much longer to hold before force-closing.
+        </div>
+        <div id="str-bn-exit-example" style="grid-column:1/-1;font-size:10px;color:#79c0ff;margin-top:-4px"></div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Deploy % of balance</div>
+          <input id="str-bn-deploy" type="number" value="95" min="50" max="99" step="5"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div>
+          <div style="color:#aabbcc;margin-bottom:2px">Floor premium (₹/share)</div>
+          <input id="str-bn-floor" type="number" value="50" min="0" max="500" step="10"
+            style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                   color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#e0eaf5">
+            <input type="checkbox" id="str-bn-autolots" checked
+              style="width:16px;height:16px;accent-color:#00d478">
+            <span>Auto-calculate lots from balance</span>
+            <span style="color:#aabbcc;font-size:10px">(like SR system)</span>
+          </label>
+        </div>
+      </div>
+      <button onclick="strBnUpdateDefaults()" style="width:100%;margin-top:10px;padding:9px;
+        background:rgba(30,144,255,.12);border:1px solid rgba(30,144,255,.35);color:#79c0ff;
+        border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+        ↺ Update Defaults — use these values every day from now on
+      </button>
+      <div id="str-bn-defaults-status" style="font-size:10px;color:#aabbcc;margin-top:6px;text-align:center"></div>
+    </div>
+
+    <!-- Live position -->
+    <div id="str-bn-position" style="display:none;background:rgba(245,166,35,.08);
+         border:1px solid rgba(245,166,35,.3);border-radius:8px;
+         padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#f5a623;margin-bottom:6px">
+        ⚡ LIVE STRADDLE POSITION
+      </div>
+      <div id="str-bn-pos-detail" style="font-size:11px;color:#e0eaf5;line-height:1.8"></div>
+      <button onclick="strBnManualExit()" style="margin-top:8px;width:100%;
+        background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);
+        color:#f85149;padding:7px;border-radius:6px;font-size:12px;
+        font-weight:600;cursor:pointer">⛔ Manual Exit Both Legs</button>
+    </div>
+
+    <!-- Today's trades -->
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:#aabbcc;margin-bottom:6px" id="str-bn-trades-header">TODAY'S TRADES</div>
+    <div id="str-bn-trades" style="margin-bottom:10px">
+      <div style="color:#aabbcc;font-size:11px;text-align:center;padding:16px">
+        No trades yet today
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:#aabbcc;margin-bottom:4px">ENGINE LOG</div>
+    <div id="str-bn-log" style="background:#1a2535;border:1px solid #2a3f55;
+         border-radius:6px;padding:8px;font-size:10px;
+         font-family:monospace;color:#aabbcc;line-height:1.6">
+      Waiting for activation...
+    </div>
+
+  </div><!-- /#t-straddle-bn -->
+
 </div><!-- /#content -->
 
 <!-- ══ BOTTOM NAV ════════════════════════════════════ -->
@@ -1150,14 +1315,6 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 <button class="nb" id="nav-auto1" onclick="go('auto1')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
     SR
-  </button>
-<button class="nb" id="nav-monitor"  onclick="go('monitor')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    Monitor
-  </button>
-<button class="nb" id="nav-tradelog" onclick="go('tradelog')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-    Trades
   </button>
 <button class="nb" id="nav-bt" onclick="go('bt')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -1181,7 +1338,19 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
   </svg>
-  Straddle
+  Straddle NF
+</button>
+<button class="nb" id="nav-straddle-bn" onclick="
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on')});
+  document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('on')});
+  document.getElementById('t-straddle-bn').classList.add('on');
+  document.getElementById('nav-straddle-bn').classList.add('on');
+  if (typeof strBnSyncFromEngine === 'function') strBnSyncFromEngine();
+">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+  </svg>
+  Straddle BN
 </button>
 <button class="nb" id="nav-auto" onclick="go('auto')" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -1199,6 +1368,10 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 let STR = {
   active:false, timer:null, monTimer:null, checkTimer:null,
   pollTimer:null, position:null, trades:[], logLines:[], niftySpot:null, volHistory:{},
+};
+let STR_BN = {
+  active:false, timer:null, monTimer:null, checkTimer:null,
+  pollTimer:null, position:null, trades:[], logLines:[],
 };
 const STR_STOCKS = [
   ['HDFCBANK',  'NSE_EQ|INE040A01034', 0.130],
@@ -1692,7 +1865,7 @@ function arm() {
   q('btn-arm').style.display    = 'none';
   q('btn-disarm').style.display = 'block';
 
-  go('monitor');
+  goMonitor();
 }
 
 function disarm() {
@@ -2060,6 +2233,13 @@ setInterval(() => {
 ════════════════════════════════════════════════════ */
 
 
+// Monitor is no longer a standalone tab — it's a sub-tab inside Replay.
+// This keeps every old "jump to monitor" call site working unchanged.
+function goMonitor() {
+  go('bt');
+  switchSubTab('monitor');
+}
+
 function go(tab) {
   // Straddle tab activation — guard against STR not yet initialised
   if (tab === 'straddle') {
@@ -2297,7 +2477,7 @@ async function armCloud() {
     q('btn-disarm').style.display = 'block';
     lg('✅ Cloud engine armed — phone can now be locked', 's');
     startCloudPoll();
-    go('monitor');
+    goMonitor();
   } catch(e) {
     lg(`❌ Cloud arm failed: ${e.message}`, 'e');
     if (e.message.includes('token') || e.message.includes('Token')) {
@@ -2465,8 +2645,11 @@ function init() {
     strFetchDefaults();
     strSyncFromEngine();
     srSyncFromEngine();
+    strBnFetchDefaults();
+    strBnSyncFromEngine();
   }
   if (typeof updateTrendExample === 'function') { updateTrendExample(); updateExitExample(); }
+  if (typeof updateBnTrendExample === 'function') { updateBnTrendExample(); updateBnExitExample(); }
 
   // ── Restore active trade if app restarted mid-trade ──────────
   const activeStatuses = ['live', 'sl_hit', 'tgt_hit', 'placed'];
@@ -2487,7 +2670,7 @@ function init() {
       requestWakeLock();
     }
     lg('📱 Trade restored after restart — tap Square Off if position already closed in Upstox', 'w');
-    go('monitor'); // jump straight to monitor tab
+    goMonitor();
   } else {
     setStatus('idle');
   }
@@ -4926,7 +5109,14 @@ function srMasterToggle(on) {
   srSetToggleUI(on);
   fetch(engineUrl() + '/engine/sr-active', {method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({active: on})}).catch(()=>{});
+    body: JSON.stringify({active: on})})
+    .then(() => {
+      if (on) {
+        if (typeof strSyncFromEngine === 'function') strSyncFromEngine();
+        if (typeof strBnSyncFromEngine === 'function') strBnSyncFromEngine();
+      }
+    })
+    .catch(()=>{});
 }
 
 // SR and Straddle are mutually exclusive server-side — straddle auto-starting
@@ -5018,13 +5208,15 @@ function strMasterToggle(on) {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(params)
     }).then(r => r.json()).then(d => {
-      if (d.ok) strLog('✅ Straddle engine active on VM — independent of app', 's');
+      if (d.ok) strLog('✅ Straddle engine active on VM — BankNifty straddle and SR are now off', 's');
       else strLog('❌ VM start failed: ' + d.error, 'e');
       strSyncFromEngine();
+      if (typeof strBnSyncFromEngine === 'function') strBnSyncFromEngine();
+      if (typeof srSyncFromEngine === 'function') srSyncFromEngine();
     }).catch(e => strLog('VM start error: ' + e.message, 'e'));
   } else {
     fetch(engineUrl() + '/engine/straddle/stop', {method:'POST'})
-      .then(() => strLog('Straddle stopped for today. SR re-activated. Resumes automatically tomorrow.', 's'))
+      .then(() => strLog('Straddle stopped for today. Resumes automatically tomorrow. Nothing else auto-starts — turn on SR or BankNifty explicitly if you want one running.', 's'))
       .catch(() => {});
     if (STR.pollTimer) { clearInterval(STR.pollTimer); STR.pollTimer = null; }
   }
@@ -5211,30 +5403,294 @@ function strRenderTrades() {
   }).join('');
 }
 
+// ══ BANKNIFTY STRADDLE JS (mirror of above) ══
+function strBnLog(msg, type='i') {
+  const ts  = new Date().toLocaleTimeString('en-IN');
+  const col = type==='s'?'var(--green)':type==='e'?'var(--red)':type==='w'?'var(--amber)':'var(--dim)';
+  STR_BN.logLines.unshift(`<span style="color:${col}">[${ts}] ${msg}</span>`);
+  if (STR_BN.logLines.length > 80) STR_BN.logLines.pop();
+  const el = q('str-bn-log');
+  if (el) el.innerHTML = STR_BN.logLines.join('<br>');
+}
+
+// Live-updates as the field changes, using the CURRENT time as "the minute
+// being checked" so the example is concrete rather than abstract.
+function updateBnTrendExample() {
+  const offset = parseInt(q('str-bn-trend-offset')?.value) || 2;
+  const el = q('str-bn-trend-example');
+  if (!el) return;
+  const x = new Date(); x.setSeconds(0,0);
+  const ref = new Date(x.getTime() - offset*60000);
+  el.textContent = `Example: checking during ${hhmm(x)} → compares against the open of ${hhmm(ref)}`;
+}
+
+function updateBnExitExample() {
+  const offset = parseInt(q('str-bn-exit-offset')?.value) || 4;
+  const el = q('str-bn-exit-example');
+  if (!el) return;
+  const x = new Date(); x.setSeconds(0,0);
+  const entry  = new Date(x.getTime() + 1*60000);
+  const cutoff = new Date(x.getTime() + offset*60000);
+  el.textContent = `Example: signal during ${hhmm(x)} → entry at ${hhmm(entry)}:00 → forced exit by ${hhmm(cutoff)}:57`;
+}
+
+function strBnSetToggleUI(active, stoppedToday) {
+  const track = q('str-bn-toggle-track');
+  const knob  = q('str-bn-toggle-knob');
+  const bar   = q('str-bn-status-bar');
+  const cb    = q('str-bn-master-toggle');
+  if (!track || !knob || !bar) return;
+  if (cb) cb.checked = !!active;
+  if (active) {
+    track.style.background = 'var(--green)'; track.style.border = 'none';
+    knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
+    bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
+      '⚡ Active on VM — checks every minute from 09:20<br>' +
+      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Resumes automatically tomorrow.</span></div>';
+  } else {
+    track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
+    knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
+    bar.innerHTML = stoppedToday
+      ? '<div style="color:var(--amber);font-size:11px">⛔ Stopped for today — resumes automatically tomorrow on login. Toggle ON to resume now.</div>'
+      : '<div style="color:var(--dim);font-size:11px">Toggle ON to activate — or just log in tomorrow, it starts itself.</div>';
+  }
+}
+
+function strBnMasterToggle(on) {
+  strBnSetToggleUI(on);
+  if (on) {
+    const params = {
+      tp: strNum('str-bn-tp', 8), sl: strNum('str-bn-sl', 4), volThr: strNum('str-bn-vol', 1),
+      lots: parseInt(q('str-bn-lots')?.value) || 6,
+      autoLots: q('str-bn-autolots')?.checked !== false,
+      deployPct: strNum('str-bn-deploy', 95), floorPremium: strNum('str-bn-floor', 50),
+      trendPts: strNum('str-bn-trend-pts', 10), trendOffsetMin: parseInt(q('str-bn-trend-offset')?.value) || 2,
+      exitOffsetMin: parseInt(q('str-bn-exit-offset')?.value) || 4,
+    };
+    fetch(engineUrl() + '/engine/straddle/bn/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    }).then(r => r.json()).then(d => {
+      if (d.ok) strBnLog('✅ Straddle engine active on VM — NIFTY straddle and SR are now off', 's');
+      else strBnLog('❌ VM start failed: ' + d.error, 'e');
+      strBnSyncFromEngine();
+      if (typeof strSyncFromEngine === 'function') strSyncFromEngine();
+      if (typeof srSyncFromEngine === 'function') srSyncFromEngine();
+    }).catch(e => strBnLog('VM start error: ' + e.message, 'e'));
+  } else {
+    fetch(engineUrl() + '/engine/straddle/bn/stop', {method:'POST'})
+      .then(() => strBnLog('Straddle stopped for today. Unlike NIFTY, BankNifty does not auto-resume — you\'ll need to turn it on again tomorrow if you want it.', 's'))
+      .catch(() => {});
+    if (STR_BN.pollTimer) { clearInterval(STR_BN.pollTimer); STR_BN.pollTimer = null; }
+  }
+}
+
+// True from the moment the user touches any parameter field until they
+// press Update Defaults. While true, the 5s background sync leaves the
+// fields alone instead of overwriting whatever's being typed with the
+// last-saved server value — that was the bug where an edit reverted to
+// the old number within a few seconds.
+let strBnParamsDirty = false;
+function strBnMarkParamsDirty() {
+  strBnParamsDirty = true;
+  const statusEl = q('str-bn-defaults-status');
+  if (statusEl) statusEl.textContent = '✏️ Unsaved changes — press Update Defaults to save';
+}
+
+function strBnApplyParamsToFields(p) {
+  if (!p) return;
+  if (q('str-bn-tp'))       q('str-bn-tp').value       = p.tp;
+  if (q('str-bn-sl'))       q('str-bn-sl').value       = p.sl;
+  if (q('str-bn-vol'))      q('str-bn-vol').value      = p.volThr;
+  if (q('str-bn-lots'))     q('str-bn-lots').value     = p.lots;
+  if (q('str-bn-deploy'))   q('str-bn-deploy').value   = p.deployPct;
+  if (q('str-bn-floor'))    q('str-bn-floor').value    = p.floorPrem;
+  if (q('str-bn-autolots')) q('str-bn-autolots').checked = p.autoLots !== false;
+  if (q('str-bn-trend-pts') && p.trendPts !== undefined)             q('str-bn-trend-pts').value    = p.trendPts;
+  if (q('str-bn-trend-offset') && p.trendOffsetMin !== undefined)    q('str-bn-trend-offset').value = p.trendOffsetMin;
+  if (q('str-bn-exit-offset') && p.exitOffsetMin !== undefined)      q('str-bn-exit-offset').value  = p.exitOffsetMin;
+  updateBnTrendExample(); updateBnExitExample();
+}
+
+// Single source of truth: pulls whatever the VM actually has (on/off,
+// position, the full day's trades + log, running params) and reflects it
+// in the UI. Called on connect/reconnect, on opening the tab, and every 5s
+// while the engine is active. Read-only — never tells the VM to change
+// anything, just mirrors it (fixes the old bug where the position panel
+// and Manual Exit silently didn't work because the local copy of the
+// position was never actually being set from the poll response).
+async function strBnSyncFromEngine() {
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/bn/status');
+    const d = await r.json();
+    if (!d.ok) return;
+    STR_BN.active = d.active;
+    strBnSetToggleUI(d.active, d.stoppedToday);
+    if (d.log) { const el = q('str-bn-log'); if (el) el.innerHTML = d.log.join('<br>'); }
+    STR_BN.position = d.position || null;
+    let liveSpot = null;
+    if (STR_BN.position) {
+      try {
+        const sr = await fetch(engineUrl() + '/engine/straddle/bn/spot');
+        const sd = await sr.json();
+        if (sd.ok) liveSpot = sd.spot;
+      } catch(_) {}
+    }
+    strBnUpdatePositionUI(liveSpot);
+    if (d.trades) { STR_BN.trades = d.trades; strBnRenderTrades(); }
+    if (!strBnParamsDirty) strBnApplyParamsToFields(d.params);   // don't clobber an in-progress edit
+
+    if (d.active && !STR_BN.pollTimer) {
+      STR_BN.pollTimer = setInterval(strBnSyncFromEngine, 5000);
+    } else if (!d.active && STR_BN.pollTimer) {
+      clearInterval(STR_BN.pollTimer); STR_BN.pollTimer = null;
+    }
+  } catch(e) { /* transient network blip — next 5s poll or next tab-open retries */ }
+}
+
+
+
+
+
+
+async function strBnManualExit() {
+  strBnLog('Manual exit requested — closing current position on VM', 'w');
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/bn/exit', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) strBnLog('Exit sent to VM', 's'); else strBnLog('Exit failed: ' + d.error, 'e');
+  } catch(e) { strBnLog('Exit error: ' + e.message, 'e'); }
+  setTimeout(strBnSyncFromEngine, 1500);
+}
+
+
+
+async function strBnUpdateDefaults() {
+  const body = {
+    tp: strNum('str-bn-tp', 8), sl: strNum('str-bn-sl', 4), volThr: strNum('str-bn-vol', 1),
+    lots: parseInt(q('str-bn-lots')?.value) || 6,
+    autoLots: q('str-bn-autolots')?.checked !== false,
+    deployPct: strNum('str-bn-deploy', 95), floorPremium: strNum('str-bn-floor', 50),
+    trendPts: strNum('str-bn-trend-pts', 10), trendOffsetMin: parseInt(q('str-bn-trend-offset')?.value) || 2,
+    exitOffsetMin: parseInt(q('str-bn-exit-offset')?.value) || 4,
+  };
+  const statusEl = q('str-bn-defaults-status');
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/bn/defaults', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      strBnParamsDirty = false;   // saved — safe for background sync to resume
+      if (statusEl) statusEl.textContent = '✅ Saved — this is the default from tomorrow (and applied live right now).';
+      strBnLog(`Defaults updated: TP=${body.tp} SL=${body.sl} Vol=${body.volThr}× Trend=${body.trendPts}pt/${body.trendOffsetMin}min ExitCutoff=x+${body.exitOffsetMin} Deploy=${body.deployPct}% Floor=₹${body.floorPremium}`, 's');
+    } else if (statusEl) statusEl.textContent = '❌ Failed: ' + d.error;
+  } catch(e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
+}
+
+// Pre-fill fields from the VM's persisted defaults (not just the HTML's
+// static values) as soon as we're connected — matters most on a fresh
+// browser/device that's never pressed Update Defaults before.
+async function strBnFetchDefaults() {
+  try {
+    const r = await fetch(engineUrl() + '/engine/straddle/bn/defaults');
+    const d = await r.json();
+    if (d.ok) strBnApplyParamsToFields(d.defaults);
+  } catch(_) {}
+}
+
+function strBnUpdatePositionUI(liveSpot) {
+  const posDiv = q('str-bn-position');
+  const detail = q('str-bn-pos-detail');
+  if (!STR_BN.position) { if(posDiv) posDiv.style.display='none'; return; }
+  if(posDiv) posDiv.style.display='block';
+  const p = STR_BN.position;
+  const move = liveSpot ? (liveSpot - p.entrySpot).toFixed(1) : '—';
+  const col  = liveSpot && liveSpot > p.entrySpot ? 'var(--green)' : 'var(--red)';
+  if(detail) detail.innerHTML = `
+    <div>Entry spot: <b>${p.entrySpot}</b> | Live: <b style="color:${col}">${liveSpot||'...'}</b> | Move: <b style="color:${col}">${move>0?'+':''}${move}pts</b></div>
+    <div>CE: ${p.ceClosed?'<span style="color:var(--green)">CLOSED</span>':'<span style="color:var(--amber)">OPEN</span>'} | PE: ${p.peClosed?'<span style="color:var(--green)">CLOSED</span>':'<span style="color:var(--amber)">OPEN</span>'}</div>
+    <div>TP: +${p.tp}pts | SL: -${p.sl}pts | Lots: ${p.lots} | Entry: ${p.entryTime}</div>`;
+}
+
+function strBnRenderTrades() {
+  const el = q('str-bn-trades');
+  if (!el) return;
+  if (!STR_BN.trades.length) {
+    el.innerHTML='<div style="color:#aabbcc;font-size:11px;text-align:center;padding:16px">No trades yet today</div>';
+    return;
+  }
+  const hdr = q('str-bn-trades-header');
+
+  // Compute daily totals
+  const totalRs  = STR_BN.trades.reduce((s,t) => s + (t.totalPnlRs||0), 0);
+  const wins     = STR_BN.trades.filter(t => (t.totalPnlRs||0) > 0).length;
+  const totalStr = `${totalRs >= 0 ? '+' : ''}₹${Math.abs(totalRs).toFixed(0)}`;
+  const totalCol = totalRs >= 0 ? '#00d478' : '#f85149';
+  if(hdr) hdr.innerHTML = `TODAY'S TRADES (${STR_BN.trades.length}) &nbsp;
+    <span style="color:${totalCol};font-size:11px">${totalStr}</span>
+    <span style="color:#aabbcc;font-size:10px;font-weight:400"> · ${wins}W/${STR_BN.trades.length-wins}L</span>`;
+
+  el.innerHTML = STR_BN.trades.map((t,i) => {
+    const entryIST = t.entryTime
+      ? new Date(t.entryTime).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})
+      : '—';
+    const exitIST = t.closeTime
+      ? new Date(t.closeTime).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})
+      : '—';
+    const pnl    = t.totalPnlRs || 0;
+    const pnlStr = `${pnl >= 0 ? '+' : ''}₹${Math.abs(pnl).toFixed(0)}`;
+    const pnlCol = pnl >= 0 ? '#00d478' : '#f85149';
+    const ceLbl  = t.ceReason === 'TP' ? '✅ TP' : t.ceReason === 'SL' ? '⛔ SL' : '⏱ Exit';
+    const peLbl  = t.peReason === 'TP' ? '✅ TP' : t.peReason === 'SL' ? '⛔ SL' : '⏱ Exit';
+    const cePnl  = t.cePnlRs || 0;
+    const pePnl  = t.pePnlRs || 0;
+    return `
+    <div style="background:#1a2535;border:1px solid ${pnl>=0?'#1a3a2a':'#3a1a1a'};
+         border-radius:6px;padding:8px 10px;margin-bottom:5px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-weight:600;color:#e0eaf5">#${STR_BN.trades.length-i} · ${entryIST} IST</span>
+        <span style="font-weight:700;font-size:13px;color:${pnlCol}">${pnlStr}</span>
+      </div>
+      <div style="display:flex;gap:12px;color:#aabbcc;font-size:10px;margin-bottom:3px">
+        <span>Spot: ${t.entrySpot} → exit ${exitIST}</span>
+        <span>${t.lots||'?'} lots</span>
+      </div>
+      <div style="display:flex;gap:8px;font-size:10px">
+        <span style="color:${cePnl>=0?'#00d478':'#f85149'}">CE ${ceLbl} ${cePnl>=0?'+':''}₹${Math.abs(cePnl).toFixed(0)}</span>
+        <span style="color:#4a6070">|</span>
+        <span style="color:${pePnl>=0?'#00d478':'#f85149'}">PE ${peLbl} ${pePnl>=0?'+':''}₹${Math.abs(pePnl).toFixed(0)}</span>
+        <span style="color:#4a6070">- ₹100 txcost</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ── Sub-tab switcher ─────────────────────────────────────────
 let _liveTestTimer = null;
 let _liveTestCountdown = null;
 const LIVE_TEST_INTERVAL = 3 * 60; // 3 minutes
 
 function switchSubTab(tab) {
-  const replay = q('subtab-replay');
-  const test   = q('subtab-test');
-  const rbtn   = q('subtab-replay-btn');
-  const tbtn   = q('subtab-test-btn');
-  if (tab === 'replay') {
-    if (replay) replay.style.display = 'block';
-    if (test)   test.style.display   = 'none';
-    if (rbtn) { rbtn.style.background='var(--blue)'; rbtn.style.color='#fff'; }
-    if (tbtn) { tbtn.style.background='var(--s2)';   tbtn.style.color='var(--dim)'; }
-    stopLiveTestTimer();
-  } else {
-    if (replay) replay.style.display = 'none';
-    if (test)   test.style.display   = 'block';
-    if (rbtn) { rbtn.style.background='var(--s2)';   rbtn.style.color='var(--dim)'; }
-    if (tbtn) { tbtn.style.background='var(--amber)'; tbtn.style.color='#000'; }
+  const panels = { replay: q('subtab-replay'), test: q('subtab-test'),
+                    monitor: q('subtab-monitor'), trades: q('subtab-trades') };
+  const btns   = { replay: q('subtab-replay-btn'), test: q('subtab-test-btn'),
+                    monitor: q('subtab-monitor-btn'), trades: q('subtab-trades-btn') };
+  for (const key in panels) {
+    if (panels[key]) panels[key].style.display = (key === tab) ? 'block' : 'none';
+    if (btns[key]) {
+      const on = key === tab;
+      btns[key].style.background = on ? (key === 'test' ? 'var(--amber)' : 'var(--blue)') : 'var(--s2)';
+      btns[key].style.color      = on ? (key === 'test' ? '#000' : '#fff') : 'var(--dim)';
+    }
+  }
+  if (tab === 'test') {
     startLiveTestTimer();
     liveTestRun(); // run immediately on switch — also on every return to this tab
+  } else {
+    stopLiveTestTimer();
   }
+  if (tab === 'trades' && typeof renderTradeLogs === 'function') renderTradeLogs();
 }
 
 function startLiveTestTimer() {
