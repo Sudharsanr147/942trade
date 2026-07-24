@@ -374,7 +374,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
     <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px;display:flex;align-items:center;gap:8px">
-      <span>v8.1 · 24-Jul-2026</span>
+      <span>v8.2 · 24-Jul-2026</span>
       <span id="hard-refresh-btn" onclick="hardRefreshApp()"
         title="Hard refresh — reload latest version from GitHub. Keeps your token and settings."
         style="cursor:pointer;color:var(--blue);font-size:13px;line-height:1;padding:2px 3px;
@@ -6340,7 +6340,7 @@ async function smBnSyncFromEngine() {
     let liveSpot = null;
     if (STR_SM_BN.position) {
       try {
-        const sr = await fetch(engineUrl() + '/engine/straddle/spot');
+        const sr = await fetch(engineUrl() + '/engine/straddle/bn/spot');
         const sd = await sr.json();
         if (sd.ok) liveSpot = sd.spot;
       } catch(_) {}
