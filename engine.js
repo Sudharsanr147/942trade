@@ -680,6 +680,9 @@ function seStart(params = {}) {
   if (SM.active) {
     smStop('NIFTY straddle activated');
   }
+  if (SM_BN.active) {
+    smBnStop('NIFTY straddle activated');
+  }
   saveState();
   seLg(`Straddle engine started — TP=${SE.tp}pt SL=${SE.sl}pt Vol≥${SE.volThr}×`, 's');
   seScheduleNextCheck();
@@ -1191,6 +1194,9 @@ function seBnStart(params = {}) {
   if (SM.active) {
     smStop('BankNifty straddle activated');
   }
+  if (SM_BN.active) {
+    smBnStop('BankNifty straddle activated');
+  }
   saveState();
   seBnLg(`Straddle engine started — TP=${SE_BN.tp}pt SL=${SE_BN.sl}pt Vol≥${SE_BN.volThr}×`, 's');
   seBnScheduleNextCheck();
@@ -1668,15 +1674,26 @@ function smLg(msg, type='i') {
   smSaveState();
 }
 
-// Market hours for NEW signal tracking/entries — deliberately narrower than
-// the straddle engine's 09:20-15:25: a confirmMin(10) + hardCloseMin(15)
-// cycle needs ~25 min to play out, so entries stop being scheduled once
-// there isn't enough day left, even though existing positions still get
-// monitored to their normal exit regardless of the clock.
+// General market hours — same window the other engines use. Checking,
+// logging, and continuing any ALREADY-IN-PROGRESS tracking all run
+// throughout this whole window, no exceptions — freezing mid-tracking is
+// exactly the bug this used to have.
 function smIsMarket() {
   const ist  = new Date(Date.now() + 5.5 * 3600000);
   const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-  return hhmm >= 9*60+16 && hhmm <= 15*60 - (SM.confirmMin + SM.hardCloseMin + 5);
+  return hhmm >= 9*60+16 && hhmm <= 15*60+25;
+}
+
+// Separate, narrower check used ONLY at the moment a FRESH crossover would
+// start a new tracking cycle — not for continuing one already in progress.
+// A cycle needs confirmMin + 1(entry delay) + hardCloseMin minutes to
+// possibly play out; this just makes sure there's still enough of the day
+// left for that, measured against the same 15:25 close the rest of the
+// engine uses (not an earlier, arbitrary cutoff).
+function smCanStartNewCycle() {
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  return hhmm <= (15*60+25) - (SM.confirmMin + 1 + SM.hardCloseMin);
 }
 
 function smStart(params = {}) {
@@ -1700,10 +1717,11 @@ function smStart(params = {}) {
     deployPct:    params.deployPct    || SM.deployPct,
     floorPrem:    params.floorPrem    || SM.floorPrem,
   });
-  // Same exclusivity group as SR / straddle-NF / straddle-BN
+  // Same exclusivity group as SR / straddle-NF / straddle-BN / SMA-BN
   if (ST.srActive)  { ST.srActive = false;  lg('SR deactivated — SMA engine started', 'w'); }
   if (SE.active)    { seStop('SMA engine activated'); }
   if (SE_BN.active) { seBnStop('SMA engine activated'); }
+  if (SM_BN.active) { smBnStop('NIFTY SMA engine activated'); }
   saveState();
   smLg(`SMA engine started — SMA${SM.smaLen}, confirm ${SM.confirmMin}min, target ${SM.target}pt, SL ${SM.stopLoss}pt, hard-close ${SM.hardCloseMin}min`, 's');
   smScheduleNextCheck();
@@ -1798,10 +1816,14 @@ async function smCheck() {
 
     if (SM.state === 'idle') {
       if (SM.lastSide !== null && SM.lastSide !== side) {
-        SM.state = 'tracking';
-        SM.trackDir = side;
-        SM.trackMinutesConfirmed = 0;
-        smLg(`🔀 Crossover — now ${side} SMA${SM.smaLen} — tracking ${SM.confirmMin}min for confirmation`, 's');
+        if (!smCanStartNewCycle()) {
+          smLg(`Crossover seen (now ${side}) but too late in the day to start a fresh ${SM.confirmMin}+${SM.hardCloseMin}min cycle — skipping`, 'w');
+        } else {
+          SM.state = 'tracking';
+          SM.trackDir = side;
+          SM.trackMinutesConfirmed = 0;
+          smLg(`🔀 Crossover — now ${side} SMA${SM.smaLen} — tracking ${SM.confirmMin}min for confirmation`, 's');
+        }
       }
     } else if (SM.state === 'tracking') {
       if (side === SM.trackDir) {
@@ -1934,6 +1956,396 @@ async function smTimeExit() {
   const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050').catch(()=>null);
   const spot = sd ? parseFloat(Object.values(sd?.data||{})[0]?.last_price) : SM.position.entrySpot;
   await smClose('TIME', spot);
+}
+
+
+// ══════════════════════════════════════════════════════════
+// SMA CROSSOVER ENGINE (BANKNIFTY) — mirror of the NIFTY one, for the
+// straddle engine. Watches for spot crossing its own SMA and
+// staying on the new side for a confirmation window, then buys
+// a single directional leg (CE or PE, not a straddle).
+// ══════════════════════════════════════════════════════════
+const SM_BN_STATE_FILE    = '/home/ubuntu/engine-sm-state.json';
+const SM_BN_DEFAULTS_FILE = '/home/ubuntu/engine-sm-defaults.json';
+
+const SM_BN_FACTORY_DEFAULTS = {
+  smaLen: 120,       // SMA period in 1-min candles (today's candles only; fewer used if fewer available)
+  confirmMin: 10,    // minutes spot must stay on the new side of the SMA before entry
+  otmSteps: 0,       // 0 = ATM; N = N strikes OTM (CE: strike+N*step, PE: strike-N*step)
+  target: 20,        // index points
+  stopLoss: 10,      // index points
+  hardCloseMin: 15,  // force-exit this many minutes after entry regardless
+  lots: 6, autoLots: true, deployPct: 95, floorPrem: 50,
+};
+
+const SM_BN = {
+  active: false,
+  smaLen: SM_BN_FACTORY_DEFAULTS.smaLen, confirmMin: SM_BN_FACTORY_DEFAULTS.confirmMin,
+  otmSteps: SM_BN_FACTORY_DEFAULTS.otmSteps, target: SM_BN_FACTORY_DEFAULTS.target,
+  stopLoss: SM_BN_FACTORY_DEFAULTS.stopLoss, hardCloseMin: SM_BN_FACTORY_DEFAULTS.hardCloseMin,
+  lots: SM_BN_FACTORY_DEFAULTS.lots, autoLots: SM_BN_FACTORY_DEFAULTS.autoLots,
+  deployPct: SM_BN_FACTORY_DEFAULTS.deployPct, floorPrem: SM_BN_FACTORY_DEFAULTS.floorPrem,
+
+  checkTimer: null, monTimer: null,
+  state: 'idle',          // idle | tracking
+  trackDir: null,         // 'above' | 'below' — side being confirmed while tracking
+  trackMinutesConfirmed: 0,
+  lastSide: null,         // side as of the previous minute's check, for crossover detection
+
+  position: null,         // {type:'CE'|'PE', key, strike, entrySpot, entryTime, lots, target, stopLoss, oid, quotedPrice, entryPrice, exitDeadlineTs}
+  trades: [], log: [], dateStr: null, stoppedToday: false,
+};
+
+function smBnSaveState() {
+  try {
+    fs.writeFileSync(SM_BN_STATE_FILE, JSON.stringify({
+      active: SM_BN.active, dateStr: SM_BN.dateStr, stoppedToday: SM_BN.stoppedToday,
+      smaLen: SM_BN.smaLen, confirmMin: SM_BN.confirmMin, otmSteps: SM_BN.otmSteps,
+      target: SM_BN.target, stopLoss: SM_BN.stopLoss, hardCloseMin: SM_BN.hardCloseMin,
+      lots: SM_BN.lots, autoLots: SM_BN.autoLots, deployPct: SM_BN.deployPct, floorPrem: SM_BN.floorPrem,
+      state: SM_BN.state, trackDir: SM_BN.trackDir, trackMinutesConfirmed: SM_BN.trackMinutesConfirmed,
+      lastSide: SM_BN.lastSide, position: SM_BN.position, trades: SM_BN.trades, log: SM_BN.log,
+    }));
+  } catch(e) { console.error('smBnSaveState:', e.message); }
+}
+
+function smBnLoadState() {
+  const today = seTodayStr();   // shared IST-date helper, already defined for the straddle engine
+  try {
+    if (fs.existsSync(SM_BN_STATE_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(SM_BN_STATE_FILE, 'utf8'));
+      Object.assign(SM_BN, {
+        smaLen: saved.smaLen ?? SM_BN.smaLen, confirmMin: saved.confirmMin ?? SM_BN.confirmMin,
+        otmSteps: saved.otmSteps ?? SM_BN.otmSteps, target: saved.target ?? SM_BN.target,
+        stopLoss: saved.stopLoss ?? SM_BN.stopLoss, hardCloseMin: saved.hardCloseMin ?? SM_BN.hardCloseMin,
+        lots: saved.lots ?? SM_BN.lots, autoLots: saved.autoLots ?? SM_BN.autoLots,
+        deployPct: saved.deployPct ?? SM_BN.deployPct, floorPrem: saved.floorPrem ?? SM_BN.floorPrem,
+      });
+      if (saved.dateStr === today) {
+        SM_BN.dateStr = today;
+        SM_BN.stoppedToday = !!saved.stoppedToday;
+        SM_BN.trades = Array.isArray(saved.trades) ? saved.trades : [];
+        SM_BN.log    = Array.isArray(saved.log) ? saved.log : [];
+        SM_BN.state  = saved.state || 'idle';
+        SM_BN.trackDir = saved.trackDir || null;
+        SM_BN.trackMinutesConfirmed = saved.trackMinutesConfirmed || 0;
+        SM_BN.lastSide = saved.lastSide || null;
+        SM_BN.position = saved.position || null;
+        lg(`📂 [SMA] Same-day state restored: ${SM_BN.trades.length} trade(s), state=${SM_BN.state}, position ${SM_BN.position ? 'OPEN' : 'none'}, wasActive=${!!saved.active}`, 'i');
+        if (saved.active && !SM_BN.stoppedToday) {
+          SM_BN.active = true;
+          smBnScheduleNextCheck();
+          if (SM_BN.position) {
+            smBnStartMonitor();
+            const msLeft = (SM_BN.position.exitDeadlineTs || 0) - Date.now();
+            if (msLeft > 0) {
+              setTimeout(() => smBnTimeExit(), msLeft);
+              lg(`⏱ [SMA] Exit timer restored (${Math.floor(msLeft/1000)}s)`, 'i');
+            } else {
+              lg('⚠️ [SMA] Exit time already passed during downtime — closing now', 'w');
+              smBnTimeExit();
+            }
+          }
+        }
+      } else {
+        SM_BN.dateStr = today; SM_BN.stoppedToday = false; SM_BN.trades = []; SM_BN.log = [];
+        SM_BN.state = 'idle'; SM_BN.trackDir = null; SM_BN.trackMinutesConfirmed = 0; SM_BN.lastSide = null; SM_BN.position = null;
+      }
+    } else {
+      SM_BN.dateStr = today;
+    }
+  } catch(e) {
+    console.error('smBnLoadState:', e.message);
+    SM_BN.dateStr = today;
+  }
+}
+
+function smBnSaveDefaults(d) {
+  try { fs.writeFileSync(SM_BN_DEFAULTS_FILE, JSON.stringify(d)); } catch(e) { console.error('smBnSaveDefaults:', e.message); }
+}
+function smBnLoadDefaults() {
+  try {
+    if (fs.existsSync(SM_BN_DEFAULTS_FILE)) return { ...SM_BN_FACTORY_DEFAULTS, ...JSON.parse(fs.readFileSync(SM_BN_DEFAULTS_FILE, 'utf8')) };
+  } catch(e) { console.error('smBnLoadDefaults:', e.message); }
+  return { ...SM_BN_FACTORY_DEFAULTS };
+}
+
+function smBnLg(msg, type='i') {
+  const ts = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'});
+  SM_BN.log.unshift(`[${ts}] ${msg}`);
+  if (SM_BN.log.length > 3000) SM_BN.log.pop();
+  lg(`[SMA] ${msg}`, type);
+  smBnSaveState();
+}
+
+// Market hours for NEW signal tracking/entries — deliberately narrower than
+// the straddle engine's 09:20-15:25: a confirmMin(10) + hardCloseMin(15)
+// cycle needs ~25 min to play out, so entries stop being scheduled once
+// there isn't enough day left, even though existing positions still get
+// monitored to their normal exit regardless of the clock.
+function smBnIsMarket() {
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  return hhmm >= 9*60+16 && hhmm <= 15*60+25;
+}
+
+function smBnCanStartNewCycle() {
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  return hhmm <= (15*60+25) - (SM_BN.confirmMin + 1 + SM_BN.hardCloseMin);
+}
+
+function smBnStart(params = {}) {
+  const today = seTodayStr();
+  if (SM_BN.dateStr !== today) {
+    SM_BN.dateStr = today; SM_BN.trades = []; SM_BN.log = [];
+    SM_BN.state = 'idle'; SM_BN.trackDir = null; SM_BN.trackMinutesConfirmed = 0; SM_BN.lastSide = null; SM_BN.position = null;
+  }
+  SM_BN.stoppedToday = false;
+  if (SM_BN.active) { smBnLg('Already active', 'w'); return; }
+  Object.assign(SM_BN, {
+    active: true,
+    smaLen:       params.smaLen       || SM_BN.smaLen,
+    confirmMin:   params.confirmMin   || SM_BN.confirmMin,
+    otmSteps:     params.otmSteps     ?? SM_BN.otmSteps,
+    target:       params.target       || SM_BN.target,
+    stopLoss:     params.stopLoss     || SM_BN.stopLoss,
+    hardCloseMin: params.hardCloseMin || SM_BN.hardCloseMin,
+    lots:         params.lots         || SM_BN.lots,
+    autoLots:     params.autoLots     !== undefined ? params.autoLots : SM_BN.autoLots,
+    deployPct:    params.deployPct    || SM_BN.deployPct,
+    floorPrem:    params.floorPrem    || SM_BN.floorPrem,
+  });
+  // Same exclusivity group as SR / straddle-NF / straddle-BN
+  if (ST.srActive)  { ST.srActive = false;  lg('SR deactivated — SMA engine started', 'w'); }
+  if (SE.active)    { seStop('SMA engine activated'); }
+  if (SE_BN.active) { seBnStop('SMA engine activated'); }
+  if (SM.active)    { smStop('BankNifty SMA engine activated'); }
+  saveState();
+  smBnLg(`SMA engine started — SMA${SM_BN.smaLen}, confirm ${SM_BN.confirmMin}min, target ${SM_BN.target}pt, SL ${SM_BN.stopLoss}pt, hard-close ${SM_BN.hardCloseMin}min`, 's');
+  smBnScheduleNextCheck();
+}
+
+function smBnStop(reason = 'Manual') {
+  SM_BN.active = false;
+  SM_BN.stoppedToday = true;
+  if (SM_BN.checkTimer) { clearTimeout(SM_BN.checkTimer); SM_BN.checkTimer = null; }
+  if (SM_BN.monTimer)   { clearInterval(SM_BN.monTimer);  SM_BN.monTimer   = null; }
+  smBnLg(`SMA engine stopped (${reason})`, 'w');
+}
+
+// BankNifty SMA is opt-in every day, same treatment as SR / NIFTY straddle
+// / BankNifty straddle — only SMA-NIFTY auto-starts. This only rolls the
+// day boundary over for the case where the VM stays up overnight without
+// restarting.
+function smBnResetIfNewDay() {
+  const today = seTodayStr();
+  if (SM_BN.dateStr !== today) {
+    SM_BN.dateStr = today; SM_BN.trades = []; SM_BN.log = [];
+    SM_BN.state = 'idle'; SM_BN.trackDir = null; SM_BN.trackMinutesConfirmed = 0; SM_BN.lastSide = null;
+    SM_BN.position = null; SM_BN.stoppedToday = false; SM_BN.active = false;
+    smBnSaveState();
+  }
+}
+
+function smBnScheduleNextCheck() {
+  if (!SM_BN.active) return;
+  const now  = new Date();
+  const secs = now.getSeconds();
+  const ms   = now.getMilliseconds();
+  const msTo50 = secs < 50 ? (50 - secs) * 1000 - ms : (60 - secs + 50) * 1000 - ms;
+  SM_BN.checkTimer = setTimeout(async () => {
+    if (SM_BN.active) { await smBnCheck(); smBnScheduleNextCheck(); }
+  }, msTo50);
+}
+
+// Builds the SMA window: today's candles so far, topped up with the tail
+// end of the most recent previous trading day if today alone isn't enough
+// yet (e.g. early morning). Walks backwards up to 7 calendar days to find
+// a trading day with data (skips weekends/holidays automatically since
+// those simply return empty). Returns candles oldest-to-newest, each as
+// [ts, open, high, low, close, vol] to match the intraday endpoint's shape.
+async function smBnGetSmaWindow(len) {
+  const cd = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%20Bank/1minute');
+  const todayCandles = (cd?.data?.candles || []).slice().reverse();   // API is most-recent-first; reverse -> chronological
+  if (todayCandles.length >= len) return todayCandles.slice(-len);
+
+  const needed = len - todayCandles.length;
+  let prevCandles = [];
+  const todayIst = new Date(Date.now() + 5.5 * 3600000);
+  for (let back = 1; back <= 7 && prevCandles.length === 0; back++) {
+    const d = new Date(todayIst);
+    d.setUTCDate(d.getUTCDate() - back);
+    const dateStr = d.toISOString().slice(0, 10);
+    try {
+      const dayCandles = await btGetCandles(dateStr);   // already chronological: [{time,open,high,low,close}]
+      if (dayCandles.length > 0) prevCandles = dayCandles;
+    } catch(_) {}
+  }
+  const prevTail = prevCandles.slice(-needed).map(c => [null, c.open, c.high, c.low, c.close, 0]);
+  return [...prevTail, ...todayCandles];
+}
+
+async function smBnCheck() {
+  if (!SM_BN.active || SM_BN.position) return;
+  if (!smBnIsMarket()) return;
+  if (!ST.token) { smBnLg('No token — skip', 'w'); return; }
+
+  try {
+    const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+    if (!spot) { smBnLg('Spot unavailable', 'w'); return; }
+
+    const windowCandles = await smBnGetSmaWindow(SM_BN.smaLen);
+    if (windowCandles.length === 0) { smBnLg('No candle history yet — skip', 'w'); return; }
+    const usedPrevDay = windowCandles.length >= SM_BN.smaLen && windowCandles.some(c => c[0] === null);
+    const sma = windowCandles.reduce((s, c) => s + parseFloat(c[4]), 0) / windowCandles.length;   // close = index 4
+    const side = spot >= sma ? 'above' : 'below';
+
+    smBnLg(`Spot ${spot} vs SMA${SM_BN.smaLen}(${windowCandles.length} candles${usedPrevDay ? ', incl. prev day' : ''}) ${sma.toFixed(1)} → ${side}`);
+
+    if (SM_BN.state === 'idle') {
+      if (SM_BN.lastSide !== null && SM_BN.lastSide !== side) {
+        if (!smBnCanStartNewCycle()) {
+          smBnLg(`Crossover seen (now ${side}) but too late in the day to start a fresh ${SM_BN.confirmMin}+${SM_BN.hardCloseMin}min cycle — skipping`, 'w');
+        } else {
+          SM_BN.state = 'tracking';
+          SM_BN.trackDir = side;
+          SM_BN.trackMinutesConfirmed = 0;
+          smBnLg(`🔀 Crossover — now ${side} SMA${SM_BN.smaLen} — tracking ${SM_BN.confirmMin}min for confirmation`, 's');
+        }
+      }
+    } else if (SM_BN.state === 'tracking') {
+      if (side === SM_BN.trackDir) {
+        SM_BN.trackMinutesConfirmed++;
+        smBnLg(`Tracking: ${SM_BN.trackMinutesConfirmed}/${SM_BN.confirmMin}min confirmed ${SM_BN.trackDir}`);
+        if (SM_BN.trackMinutesConfirmed >= SM_BN.confirmMin) {
+          smBnLg(`✅ Confirmed ${SM_BN.confirmMin}min ${SM_BN.trackDir} SMA${SM_BN.smaLen} — entering next minute`, 's');
+          const dir = SM_BN.trackDir;
+          SM_BN.state = 'idle'; SM_BN.trackDir = null; SM_BN.trackMinutesConfirmed = 0;
+          const now4 = new Date();
+          const msToNextMin = (60 - now4.getSeconds()) * 1000 - now4.getMilliseconds() + 100;
+          setTimeout(() => smBnEnter(dir === 'above' ? 'CE' : 'PE', spot), msToNextMin);
+        }
+      } else {
+        smBnLg(`❌ Crossed back to ${side} after ${SM_BN.trackMinutesConfirmed}/${SM_BN.confirmMin}min — tracking reset`, 'w');
+        SM_BN.state = 'idle'; SM_BN.trackDir = null; SM_BN.trackMinutesConfirmed = 0;
+      }
+    }
+    SM_BN.lastSide = side;
+    smBnSaveState();
+  } catch(e) { smBnLg('Check error: ' + e.message, 'e'); }
+}
+
+function smBnRecordFill(oid, field, price) {
+  if (price == null) return;
+  if (SM_BN.position && SM_BN.position.oid === oid) SM_BN.position[field] = price;
+  const t = SM_BN.trades.find(x => x.oid === oid);
+  if (t) t[field] = price;
+  smBnSaveState();
+}
+
+async function smBnEnter(direction, signalSpot) {
+  if (!SM_BN.active || SM_BN.position) return;
+  try {
+    smBnLg(`Placing ${direction}...`, 'w');
+    const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price) || signalSpot;
+    const baseAtm = Math.round(spot / 100) * 100;
+    const strike = direction === 'CE' ? baseAtm + SM_BN.otmSteps*100 : baseAtm - SM_BN.otmSteps*100;
+
+    let calcLots = SM_BN.lots;
+    const expiry = await getLiveExpiry('BN');
+    const inst = await findInstrument(expiry, strike, direction, 'BN');
+
+    if (SM_BN.autoLots) {
+      try {
+        const funds = await getAvailableFunds();
+        const deployable = funds * SM_BN.deployPct / 100;
+        const effPrem = (SM_BN.floorPrem > 0 && inst.ltp < SM_BN.floorPrem) ? SM_BN.floorPrem : inst.ltp;
+        const costPerLot = effPrem * 30;
+        if (costPerLot > 0) {
+          calcLots = Math.max(1, Math.floor(deployable / costPerLot));
+          smBnLg(`💰 Balance ₹${funds.toFixed(0)} | ${SM_BN.deployPct}% → ₹${deployable.toFixed(0)} | cost/lot ₹${costPerLot.toFixed(0)} → ${calcLots} lots`, 's');
+        }
+      } catch(e) { smBnLg('Auto-lots failed: ' + e.message + ' — using ' + calcLots, 'w'); }
+    }
+
+    const qty = calcLots * 30;
+    smBnLg(`📐 Quoted premium before order: ${strike}${direction} ₹${inst.ltp}`, 'i');
+    const oid = await placeMarket(inst.key, 'BUY', qty, 'D', 30);
+
+    const exitDeadlineTs = Date.now() + SM_BN.hardCloseMin * 60000;
+    SM_BN.position = {
+      type: direction, key: inst.key, strike,
+      entrySpot: spot, entryTime: new Date().toISOString(),
+      lots: calcLots, target: SM_BN.target, stopLoss: SM_BN.stopLoss,
+      oid, quotedPrice: inst.ltp, entryPrice: null, exitPrice: null,
+      exitDeadlineTs,
+    };
+    smBnLg(`✅ ENTERED ${strike}${direction} × ${calcLots} lots @ spot ${spot}`, 's');
+    smBnLg(`Target: spot ${direction==='CE'?'+':'-'}${SM_BN.target}pts | SL: spot ${direction==='CE'?'-':'+'}${SM_BN.stopLoss}pts | hard-close ${SM_BN.hardCloseMin}min`, 'i');
+
+    smBnStartMonitor();
+    setTimeout(() => smBnTimeExit(), SM_BN.hardCloseMin * 60000);
+
+    (async () => {
+      const fill = await waitFill(oid).catch(e => { smBnLg(`Entry fill confirm failed: ${e.message}`, 'w'); return null; });
+      smBnRecordFill(oid, 'entryPrice', fill);
+      if (fill != null) smBnLg(`📋 Entry fill confirmed: ₹${fill}`, 'i');
+    })();
+  } catch(e) { smBnLg('Entry error: ' + e.message, 'e'); }
+}
+
+function smBnStartMonitor() {
+  if (SM_BN.monTimer) clearInterval(SM_BN.monTimer);
+  SM_BN.monTimer = setInterval(async () => {
+    if (!SM_BN.position) { clearInterval(SM_BN.monTimer); SM_BN.monTimer = null; return; }
+    try {
+      const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank');
+      const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+      if (!spot) return;
+      const p = SM_BN.position;
+      const move = p.type === 'CE' ? (spot - p.entrySpot) : (p.entrySpot - spot);
+      if (move >= p.target)      await smBnClose('TARGET', spot);
+      else if (move <= -p.stopLoss) await smBnClose('STOPLOSS', spot);
+    } catch(_) {}
+  }, 500);
+}
+
+async function smBnClose(reason, closeSpot) {
+  if (!SM_BN.position) return;
+  if (SM_BN.monTimer) { clearInterval(SM_BN.monTimer); SM_BN.monTimer = null; }
+  const p = SM_BN.position;
+  try {
+    const qty = p.lots * 30;
+    const oid = await placeMarket(p.key, 'SELL', qty, 'D', 30);
+    const DELTA = 0.4;   // established NIFTY convention for rough P&L estimate — real fill confirmed separately below
+    const move = p.type === 'CE' ? (closeSpot - p.entrySpot) : (p.entrySpot - closeSpot);
+    const optPnlPts = move * DELTA;
+    const pnlRs = optPnlPts * 30 * p.lots;
+
+    const trade = { ...p, exitOid: oid, exitReason: reason, exitSpot: closeSpot,
+                     pnlPts: optPnlPts, pnlRs, closeTime: new Date().toISOString() };
+    SM_BN.trades.unshift(trade);
+    if (SM_BN.trades.length > 300) SM_BN.trades.pop();
+    SM_BN.position = null;
+    smBnLg(`${p.type} closed (${reason}): order ${oid} | P&L (est): ${optPnlPts>=0?'+':''}${optPnlPts.toFixed(2)}pts = ₹${pnlRs>=0?'+':''}${pnlRs.toFixed(0)}`, reason==='TARGET'?'s':'w');
+
+    (async () => {
+      const fill = await waitFill(oid).catch(e => { smBnLg(`Exit fill confirm failed: ${e.message}`, 'w'); return null; });
+      smBnRecordFill(oid, 'exitPrice', fill);
+      if (fill != null) smBnLg(`📋 Exit fill confirmed: ₹${fill}`, 'i');
+    })();
+  } catch(e) { smBnLg('Close error: ' + e.message, 'e'); }
+}
+
+async function smBnTimeExit() {
+  if (!SM_BN.position) return;
+  smBnLg('⏱ Hard close — time limit reached', 'w');
+  const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%20Bank').catch(()=>null);
+  const spot = sd ? parseFloat(Object.values(sd?.data||{})[0]?.last_price) : SM_BN.position.entrySpot;
+  await smBnClose('TIME', spot);
 }
 
 
@@ -2481,6 +2893,9 @@ const server = http.createServer(async (req, res) => {
     if (ST.srActive && SM.active) {
       smStop('SR activated');
     }
+    if (ST.srActive && SM_BN.active) {
+      smBnStop('SR activated');
+    }
     if (ST.srActive) {
       // Arm the roster NOW. Without this, a roster pushed while SR was off
       // (the normal case now that off is the default) would stay un-armed
@@ -2854,6 +3269,99 @@ const server = http.createServer(async (req, res) => {
     return ok({ ok: true, defaults: next });
   }
 
+  // ══ SMA CROSSOVER ENGINE ROUTES (BANKNIFTY) ══════════════════
+  if (p === '/engine/sma/bn/start' && req.method === 'POST') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    const d = smBnLoadDefaults();
+    smBnStart({
+      smaLen:       body.smaLen       || d.smaLen,
+      confirmMin:   body.confirmMin   || d.confirmMin,
+      otmSteps:     body.otmSteps     ?? d.otmSteps,
+      target:       body.target       || d.target,
+      stopLoss:     body.stopLoss     || d.stopLoss,
+      hardCloseMin: body.hardCloseMin || d.hardCloseMin,
+      lots:         body.lots         || d.lots,
+      autoLots:     body.autoLots     !== undefined ? body.autoLots : d.autoLots,
+      deployPct:    body.deployPct    || d.deployPct,
+      floorPrem:    body.floorPremium || d.floorPrem,
+    });
+    return ok({ ok: true, message: 'BankNifty SMA engine started on VM' });
+  }
+
+  if (p === '/engine/sma/bn/stop' && req.method === 'POST') {
+    smBnStop('Manual — user toggle');
+    return ok({ ok: true, message: 'SMA engine stopped for the rest of today' });
+  }
+
+  if (p === '/engine/sma/bn/status' && req.method === 'GET') {
+    return ok({
+      ok: true,
+      active: SM_BN.active, stoppedToday: SM_BN.stoppedToday, dateStr: SM_BN.dateStr,
+      state: SM_BN.state, trackDir: SM_BN.trackDir, trackMinutesConfirmed: SM_BN.trackMinutesConfirmed,
+      position: SM_BN.position, trades: SM_BN.trades, log: SM_BN.log,
+      params: { smaLen: SM_BN.smaLen, confirmMin: SM_BN.confirmMin, otmSteps: SM_BN.otmSteps,
+                target: SM_BN.target, stopLoss: SM_BN.stopLoss, hardCloseMin: SM_BN.hardCloseMin,
+                lots: SM_BN.lots, autoLots: SM_BN.autoLots, deployPct: SM_BN.deployPct, floorPrem: SM_BN.floorPrem },
+    });
+  }
+
+  if (p === '/engine/sma/bn/report' && req.method === 'GET') {
+    const lines = [];
+    lines.push(`942 Trade — SMA crossover report (BANKNIFTY) — ${SM_BN.dateStr || seTodayStr()}`);
+    lines.push(`Active: ${SM_BN.active} | Stopped by user today: ${SM_BN.stoppedToday} | State: ${SM_BN.state}${SM_BN.state==='tracking' ? ' ('+SM_BN.trackMinutesConfirmed+'/'+SM_BN.confirmMin+'min '+SM_BN.trackDir+')' : ''}`);
+    lines.push(`Params: SMA${SM_BN.smaLen} confirm=${SM_BN.confirmMin}min OTM=${SM_BN.otmSteps} target=${SM_BN.target}pt SL=${SM_BN.stopLoss}pt hardClose=${SM_BN.hardCloseMin}min Lots=${SM_BN.lots}${SM_BN.autoLots?' (auto)':''} Deploy=${SM_BN.deployPct}% Floor=Rs${SM_BN.floorPrem}`);
+    lines.push('');
+    if (SM_BN.position) {
+      const p2 = SM_BN.position;
+      lines.push(`OPEN POSITION: ${p2.strike}${p2.type} entry ${p2.entryTime} | spot ${p2.entrySpot} | ${p2.lots} lots`);
+      lines.push(`  quoted Rs${p2.quotedPrice ?? '?'} | entry fill Rs${p2.entryPrice ?? 'pending'}`);
+      lines.push('');
+    }
+    lines.push(`=== TRADES (${SM_BN.trades.length}) ===`);
+    if (!SM_BN.trades.length) lines.push('(none yet today)');
+    SM_BN.trades.slice().reverse().forEach((t, i) => {
+      lines.push(`#${i+1}  ${t.strike}${t.type}  entry ${t.entryTime} spot ${t.entrySpot} ${t.lots} lots -> close ${t.closeTime || '?'}`);
+      lines.push(`  quoted Rs${t.quotedPrice ?? '?'} -> entry Rs${t.entryPrice ?? '?'} -> exit Rs${t.exitPrice ?? '?'}  [${t.exitReason || '?'}]  est P&L Rs${(t.pnlRs ?? 0).toFixed(0)}`);
+      lines.push('');
+    });
+    lines.push(`=== FULL LOG (${SM_BN.log.length} lines, chronological) ===`);
+    SM_BN.log.slice().reverse().forEach(l => lines.push(l));
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end(lines.join('\n'));
+    return;
+  }
+
+  if (p === '/engine/sma/bn/exit' && req.method === 'POST') {
+    if (!SM_BN.position) return ok({ ok: false, error: 'No open position' });
+    await smTimeExit();
+    return ok({ ok: true, message: 'Manual exit triggered' });
+  }
+
+  if (p === '/engine/sma/bn/defaults' && req.method === 'GET') {
+    return ok({ ok: true, defaults: smBnLoadDefaults() });
+  }
+
+  if (p === '/engine/sma/bn/defaults' && req.method === 'POST') {
+    const cur = smBnLoadDefaults();
+    const next = {
+      smaLen:       body.smaLen       ?? cur.smaLen,
+      confirmMin:   body.confirmMin   ?? cur.confirmMin,
+      otmSteps:     body.otmSteps     ?? cur.otmSteps,
+      target:       body.target       ?? cur.target,
+      stopLoss:     body.stopLoss     ?? cur.stopLoss,
+      hardCloseMin: body.hardCloseMin ?? cur.hardCloseMin,
+      lots:         body.lots         ?? cur.lots,
+      autoLots:     body.autoLots     !== undefined ? body.autoLots : cur.autoLots,
+      deployPct:    body.deployPct    ?? cur.deployPct,
+      floorPrem:    body.floorPremium ?? body.floorPrem ?? cur.floorPrem,
+    };
+    smBnSaveDefaults(next);
+    if (SM_BN.active) Object.assign(SM_BN, next);
+    lg(`[SMA-BN] Defaults updated: SMA${next.smaLen} confirm=${next.confirmMin}min OTM=${next.otmSteps} target=${next.target}pt SL=${next.stopLoss}pt hardClose=${next.hardCloseMin}min Deploy=${next.deployPct}% Floor=₹${next.floorPrem} Lots=${next.lots}`, 's');
+    smBnSaveState();
+    return ok({ ok: true, defaults: next });
+  }
+
 
   // ── GET /engine/straddle/volcheck ───────────────────────
   if (p === '/engine/straddle/volcheck' && req.method === 'GET') {
@@ -2979,11 +3487,13 @@ const server = http.createServer(async (req, res) => {
     seResetIfNewDay();
     // BankNifty straddle is opt-in every day too
     seBnResetIfNewDay();
+    // BankNifty SMA is opt-in every day too
+    smBnResetIfNewDay();
     // Always-on by default: SMA-NIFTY resumes automatically unless user turned it off today
     smAutoStartIfNeeded();
     return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday,
                 straddleBnActive: SE_BN.active, straddleBnStoppedToday: SE_BN.stoppedToday,
-                smaActive: SM.active, srActive: ST.srActive });
+                smaActive: SM.active, smaBnActive: SM_BN.active, srActive: ST.srActive });
   }
 
   // ── POST /engine/arm (manual) ───────────────────────────
@@ -3415,6 +3925,7 @@ server.listen(PORT, '0.0.0.0', () => {
   seLoadState();
   seBnLoadState();
   smLoadState();
+  smBnLoadState();
   btScheduleDailyRun();
   lg('BT daily scheduler started (fires at 15:32 IST)', 'i');
 });
