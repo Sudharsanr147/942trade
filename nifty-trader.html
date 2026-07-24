@@ -374,7 +374,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
   <div>
     <div class="h-title">◈ NIFTY TRADER</div>
     <div style="font-size:9px;color:var(--dim);letter-spacing:.06em;margin-top:2px;display:flex;align-items:center;gap:8px">
-      <span>v7.1 · 23-Jul-2026</span>
+      <span>v8.0 · 24-Jul-2026</span>
       <span id="hard-refresh-btn" onclick="hardRefreshApp()"
         title="Hard refresh — reload latest version from GitHub. Keeps your token and settings."
         style="cursor:pointer;color:var(--blue);font-size:13px;line-height:1;padding:2px 3px;
@@ -1009,7 +1009,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           Straddle Engine
         </div>
         <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="str-subtitle">
-          Vol surge detector · buys CE+PE · always-on by default, turns off BankNifty + SR
+          Vol surge detector · buys CE+PE · manual each day, turns off BankNifty + SMA + SR
         </div>
       </div>
       <!-- Master ON/OFF -->
@@ -1161,7 +1161,7 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
           Straddle Engine — BankNifty
         </div>
         <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="str-bn-subtitle">
-          Vol surge detector · buys CE+PE · lot 30, monthly expiry · manual each day, turns off NIFTY + SR
+          Vol surge detector · buys CE+PE · lot 30, monthly expiry · manual each day, turns off NIFTY + SMA + SR
         </div>
       </div>
       <!-- Master ON/OFF -->
@@ -1304,6 +1304,154 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
 
   </div><!-- /#t-straddle-bn -->
 
+  <div class="tab" id="t-sma">
+    <div style="color:#ffffff;font-size:16px;font-weight:bold;padding:12px">📈 SMA CROSSOVER ENGINE — NIFTY</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#aabbcc">
+          SMA Crossover — NIFTY
+        </div>
+        <div style="font-size:11px;color:#aabbcc;margin-top:2px" id="sm-subtitle">
+          Crosses SMA, confirms direction, buys CE or PE · always-on by default, turns off everything else
+        </div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+        <input type="checkbox" id="sm-master-toggle" onchange="smMasterToggle(this.checked)"
+          style="opacity:0;width:0;height:0">
+        <span id="sm-toggle-track" style="position:absolute;top:0;left:0;right:0;bottom:0;
+          background:var(--s3);border:1px solid var(--bdr);border-radius:24px;transition:.3s">
+          <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;
+            background:var(--dim);border-radius:50%;transition:.3s;
+            transform:translateX(0)" id="sm-toggle-knob"></span>
+        </span>
+      </label>
+    </div>
+
+    <div id="sm-status-bar" style="background:#1a2535;border:1px solid #2a3f55;
+         border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px">
+      <div style="color:#aabbcc">Toggle ON to activate</div>
+    </div>
+
+    <!-- Tracking status (crossover detected, confirming direction) -->
+    <div id="sm-tracking" style="display:none;background:rgba(121,192,255,.08);
+         border:1px solid rgba(121,192,255,.3);border-radius:8px;
+         padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#79c0ff;margin-bottom:4px">🔍 TRACKING CROSSOVER</div>
+      <div id="sm-tracking-detail" style="font-size:11px;color:#e0eaf5"></div>
+    </div>
+
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:#aabbcc;margin-bottom:8px">Parameters</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px"
+         oninput="smMarkParamsDirty()" onchange="smMarkParamsDirty()">
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">SMA length (candles)</div>
+        <input id="sm-sma-len" type="number" value="120" min="5" max="375" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Confirm window (min)</div>
+        <input id="sm-confirm-min" type="number" value="10" min="1" max="60" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">OTM steps (0=ATM)</div>
+        <input id="sm-otm-steps" type="number" value="0" min="0" max="10" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Lots (manual fallback)</div>
+        <input id="sm-lots" type="number" value="6" min="1" max="50" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Target (index pts)</div>
+        <input id="sm-target" type="number" value="20" min="1" max="200" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Stop loss (index pts)</div>
+        <input id="sm-stoploss" type="number" value="10" min="1" max="100" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Hard close (min after entry)</div>
+        <input id="sm-hardclose" type="number" value="15" min="1" max="120" step="1"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Deploy % of balance</div>
+        <input id="sm-deploy" type="number" value="95" min="50" max="99" step="5"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div>
+        <div style="color:#aabbcc;margin-bottom:2px">Floor premium (₹/share)</div>
+        <input id="sm-floor" type="number" value="50" min="0" max="500" step="10"
+          style="width:100%;background:#0f1923;border:1px solid #2a3f55;
+                 color:#e0eaf5;padding:5px 8px;border-radius:5px;font-size:12px">
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#e0eaf5">
+          <input type="checkbox" id="sm-autolots" checked
+            style="width:16px;height:16px;accent-color:#00d478">
+          <span>Auto-calculate lots from balance</span>
+          <span style="color:#aabbcc;font-size:10px">(like SR system)</span>
+        </label>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#aabbcc;margin-top:6px">
+      120 candles ≈ this morning's SMA borrows the tail of the previous trading day if today doesn't have enough yet.
+    </div>
+    <button onclick="smUpdateDefaults()" style="width:100%;margin-top:10px;padding:9px;
+      background:rgba(30,144,255,.12);border:1px solid rgba(30,144,255,.35);color:#79c0ff;
+      border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+      ↺ Update Defaults — use these values every day from now on
+    </button>
+    <div id="sm-defaults-status" style="font-size:10px;color:#aabbcc;margin-top:6px;text-align:center"></div>
+
+    <!-- Live position -->
+    <div id="sm-position" style="display:none;background:rgba(245,166,35,.08);
+         border:1px solid rgba(245,166,35,.3);border-radius:8px;
+         padding:10px 12px;margin:10px 0">
+      <div style="font-size:10px;font-weight:700;color:#f5a623;margin-bottom:6px">
+        ⚡ LIVE POSITION
+      </div>
+      <div id="sm-pos-detail" style="font-size:11px;color:#e0eaf5;line-height:1.8"></div>
+      <button onclick="smManualExit()" style="margin-top:8px;width:100%;
+        background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);
+        color:#f85149;padding:7px;border-radius:6px;font-size:12px;
+        font-weight:600;cursor:pointer">⛔ Manual Exit Position</button>
+    </div>
+
+    <!-- Today's trades -->
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:#aabbcc;margin-bottom:6px" id="sm-trades-header">TODAY'S TRADES</div>
+    <div id="sm-trades" style="margin-bottom:10px">
+      <div style="color:#aabbcc;font-size:11px;text-align:center;padding:16px">
+        No trades yet today
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+         color:#aabbcc;margin-bottom:4px">ENGINE LOG</div>
+    <div id="sm-log" style="background:#1a2535;border:1px solid #2a3f55;
+         border-radius:6px;padding:8px;font-size:10px;
+         font-family:monospace;color:#aabbcc;line-height:1.6">
+      Waiting for activation...
+    </div>
+
+  </div><!-- /#t-sma -->
+
+
 </div><!-- /#content -->
 
 <!-- ══ BOTTOM NAV ════════════════════════════════════ -->
@@ -1351,6 +1499,18 @@ hr { border:none; border-top:1px solid var(--bdr); margin:16px 0; }
     <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
   </svg>
   Straddle BN
+</button>
+<button class="nb" id="nav-sma" onclick="
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on')});
+  document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('on')});
+  document.getElementById('t-sma').classList.add('on');
+  document.getElementById('nav-sma').classList.add('on');
+  if (typeof smSyncFromEngine === 'function') smSyncFromEngine();
+">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>
+  </svg>
+  SMA NIFTY
 </button>
 <button class="nb" id="nav-auto" onclick="go('auto')" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -2647,6 +2807,8 @@ function init() {
     srSyncFromEngine();
     strBnFetchDefaults();
     strBnSyncFromEngine();
+    smFetchDefaults();
+    smSyncFromEngine();
   }
   if (typeof updateTrendExample === 'function') { updateTrendExample(); updateExitExample(); }
   if (typeof updateBnTrendExample === 'function') { updateBnTrendExample(); updateBnExitExample(); }
@@ -5114,6 +5276,7 @@ function srMasterToggle(on) {
       if (on) {
         if (typeof strSyncFromEngine === 'function') strSyncFromEngine();
         if (typeof strBnSyncFromEngine === 'function') strBnSyncFromEngine();
+        if (typeof smSyncFromEngine === 'function') smSyncFromEngine();
       }
     })
     .catch(()=>{});
@@ -5183,13 +5346,11 @@ function strSetToggleUI(active, stoppedToday) {
     knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
     bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
       '⚡ Active on VM — checks every minute from 09:20<br>' +
-      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Resumes automatically tomorrow.</span></div>';
+      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Opt-in only — won\'t auto-resume tomorrow, SMA-NIFTY is the default now.</span></div>';
   } else {
     track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
     knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
-    bar.innerHTML = stoppedToday
-      ? '<div style="color:var(--amber);font-size:11px">⛔ Stopped for today — resumes automatically tomorrow on login. Toggle ON to resume now.</div>'
-      : '<div style="color:var(--dim);font-size:11px">Toggle ON to activate — or just log in tomorrow, it starts itself.</div>';
+    bar.innerHTML = '<div style="color:var(--dim);font-size:11px">Off by default — SMA-NIFTY runs unless you turn this on instead. Toggle ON to activate (switches SMA off).</div>';
   }
 }
 
@@ -5208,15 +5369,16 @@ function strMasterToggle(on) {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(params)
     }).then(r => r.json()).then(d => {
-      if (d.ok) strLog('✅ Straddle engine active on VM — BankNifty straddle and SR are now off', 's');
+      if (d.ok) strLog('✅ Straddle engine active on VM — SMA-NIFTY, BankNifty straddle and SR are now off', 's');
       else strLog('❌ VM start failed: ' + d.error, 'e');
       strSyncFromEngine();
       if (typeof strBnSyncFromEngine === 'function') strBnSyncFromEngine();
       if (typeof srSyncFromEngine === 'function') srSyncFromEngine();
+      if (typeof smSyncFromEngine === 'function') smSyncFromEngine();
     }).catch(e => strLog('VM start error: ' + e.message, 'e'));
   } else {
     fetch(engineUrl() + '/engine/straddle/stop', {method:'POST'})
-      .then(() => strLog('Straddle stopped for today. Resumes automatically tomorrow. Nothing else auto-starts — turn on SR or BankNifty explicitly if you want one running.', 's'))
+      .then(() => strLog('Straddle stopped. Won\'t auto-resume tomorrow — SMA-NIFTY is the default now. Turn this back on explicitly whenever you want it.', 's'))
       .catch(() => {});
     if (STR.pollTimer) { clearInterval(STR.pollTimer); STR.pollTimer = null; }
   }
@@ -5446,13 +5608,11 @@ function strBnSetToggleUI(active, stoppedToday) {
     knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
     bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
       '⚡ Active on VM — checks every minute from 09:20<br>' +
-      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Resumes automatically tomorrow.</span></div>';
+      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Opt-in only — won\'t auto-resume tomorrow.</span></div>';
   } else {
     track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
     knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
-    bar.innerHTML = stoppedToday
-      ? '<div style="color:var(--amber);font-size:11px">⛔ Stopped for today — resumes automatically tomorrow on login. Toggle ON to resume now.</div>'
-      : '<div style="color:var(--dim);font-size:11px">Toggle ON to activate — or just log in tomorrow, it starts itself.</div>';
+    bar.innerHTML = '<div style="color:var(--dim);font-size:11px">Off by default — turn on when you want to run BankNifty instead of the default.</div>';
   }
 }
 
@@ -5471,11 +5631,12 @@ function strBnMasterToggle(on) {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(params)
     }).then(r => r.json()).then(d => {
-      if (d.ok) strBnLog('✅ Straddle engine active on VM — NIFTY straddle and SR are now off', 's');
+      if (d.ok) strBnLog('✅ Straddle engine active on VM — SMA-NIFTY, NIFTY straddle and SR are now off', 's');
       else strBnLog('❌ VM start failed: ' + d.error, 'e');
       strBnSyncFromEngine();
       if (typeof strSyncFromEngine === 'function') strSyncFromEngine();
       if (typeof srSyncFromEngine === 'function') srSyncFromEngine();
+      if (typeof smSyncFromEngine === 'function') smSyncFromEngine();
     }).catch(e => strBnLog('VM start error: ' + e.message, 'e'));
   } else {
     fetch(engineUrl() + '/engine/straddle/bn/stop', {method:'POST'})
@@ -5661,6 +5822,227 @@ function strBnRenderTrades() {
         <span style="color:#4a6070">|</span>
         <span style="color:${pePnl>=0?'#00d478':'#f85149'}">PE ${peLbl} ${pePnl>=0?'+':''}₹${Math.abs(pePnl).toFixed(0)}</span>
         <span style="color:#4a6070">- ₹100 txcost</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══ SMA CROSSOVER ENGINE JS (NIFTY) ══
+let STR_SM = {
+  active:false, pollTimer:null, position:null, trades:[], logLines:[],
+};
+
+function smLog(msg, type='i') {
+  const ts  = new Date().toLocaleTimeString('en-IN');
+  const col = type==='s'?'var(--green)':type==='e'?'var(--red)':type==='w'?'var(--amber)':'var(--dim)';
+  STR_SM.logLines.unshift(`<span style="color:${col}">[${ts}] ${msg}</span>`);
+  if (STR_SM.logLines.length > 80) STR_SM.logLines.pop();
+  const el = q('sm-log');
+  if (el) el.innerHTML = STR_SM.logLines.join('<br>');
+}
+
+function smSetToggleUI(active, stoppedToday) {
+  const track = q('sm-toggle-track');
+  const knob  = q('sm-toggle-knob');
+  const bar   = q('sm-status-bar');
+  const cb    = q('sm-master-toggle');
+  if (!track || !knob || !bar) return;
+  if (cb) cb.checked = !!active;
+  if (active) {
+    track.style.background = 'var(--green)'; track.style.border = 'none';
+    knob.style.background  = '#fff'; knob.style.transform = 'translateX(20px)';
+    bar.innerHTML = '<div style="color:var(--green);font-size:11px;font-weight:600">' +
+      '⚡ Active on VM — checks every minute<br>' +
+      '<span style="color:#aabbcc;font-weight:400">Works even if the app is closed. Resumes automatically tomorrow — this is the default engine.</span></div>';
+  } else {
+    track.style.background = 'var(--s3)'; track.style.border = '1px solid var(--bdr)';
+    knob.style.background  = 'var(--dim)'; knob.style.transform = 'translateX(0)';
+    bar.innerHTML = stoppedToday
+      ? '<div style="color:var(--amber);font-size:11px">⛔ Stopped for today — resumes automatically tomorrow on login. Toggle ON to resume now.</div>'
+      : '<div style="color:var(--dim);font-size:11px">Toggle ON to activate — or just log in tomorrow, it starts itself (this is the default).</div>';
+  }
+}
+
+function smMasterToggle(on) {
+  smSetToggleUI(on);
+  if (on) {
+    const params = {
+      smaLen: parseInt(q('sm-sma-len')?.value) || 120,
+      confirmMin: parseInt(q('sm-confirm-min')?.value) || 10,
+      otmSteps: parseInt(q('sm-otm-steps')?.value) || 0,
+      target: smNum('sm-target', 20), stopLoss: smNum('sm-stoploss', 10),
+      hardCloseMin: parseInt(q('sm-hardclose')?.value) || 15,
+      lots: parseInt(q('sm-lots')?.value) || 6,
+      autoLots: q('sm-autolots')?.checked !== false,
+      deployPct: smNum('sm-deploy', 95), floorPremium: smNum('sm-floor', 50),
+    };
+    fetch(engineUrl() + '/engine/sma/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    }).then(r => r.json()).then(d => {
+      if (d.ok) smLog('✅ SMA engine active on VM — NIFTY straddle, BankNifty straddle and SR are now off', 's');
+      else smLog('❌ VM start failed: ' + d.error, 'e');
+      smSyncFromEngine();
+      if (typeof strSyncFromEngine === 'function') strSyncFromEngine();
+      if (typeof strBnSyncFromEngine === 'function') strBnSyncFromEngine();
+      if (typeof srSyncFromEngine === 'function') srSyncFromEngine();
+    }).catch(e => smLog('VM start error: ' + e.message, 'e'));
+  } else {
+    fetch(engineUrl() + '/engine/sma/stop', {method:'POST'})
+      .then(() => smLog('SMA engine stopped for today. Resumes automatically tomorrow.', 's'))
+      .catch(() => {});
+    if (STR_SM.pollTimer) { clearInterval(STR_SM.pollTimer); STR_SM.pollTimer = null; }
+  }
+}
+
+function smNum(id, def) {
+  const n = parseFloat(q(id)?.value);
+  return Number.isFinite(n) ? n : def;
+}
+
+let smParamsDirty = false;
+function smMarkParamsDirty() {
+  smParamsDirty = true;
+  const statusEl = q('sm-defaults-status');
+  if (statusEl) statusEl.textContent = '✏️ Unsaved changes — press Update Defaults to save';
+}
+
+function smApplyParamsToFields(p) {
+  if (!p) return;
+  if (q('sm-sma-len'))     q('sm-sma-len').value     = p.smaLen;
+  if (q('sm-confirm-min')) q('sm-confirm-min').value = p.confirmMin;
+  if (q('sm-otm-steps'))   q('sm-otm-steps').value   = p.otmSteps;
+  if (q('sm-target'))      q('sm-target').value      = p.target;
+  if (q('sm-stoploss'))    q('sm-stoploss').value    = p.stopLoss;
+  if (q('sm-hardclose'))   q('sm-hardclose').value   = p.hardCloseMin;
+  if (q('sm-lots'))        q('sm-lots').value        = p.lots;
+  if (q('sm-deploy'))      q('sm-deploy').value      = p.deployPct;
+  if (q('sm-floor'))       q('sm-floor').value       = p.floorPrem;
+  if (q('sm-autolots'))    q('sm-autolots').checked  = p.autoLots !== false;
+}
+
+async function smSyncFromEngine() {
+  try {
+    const r = await fetch(engineUrl() + '/engine/sma/status');
+    const d = await r.json();
+    if (!d.ok) return;
+    STR_SM.active = d.active;
+    smSetToggleUI(d.active, d.stoppedToday);
+    if (d.log) { const el = q('sm-log'); if (el) el.innerHTML = d.log.join('<br>'); }
+
+    // Tracking status panel
+    const trackEl = q('sm-tracking'), trackDetail = q('sm-tracking-detail');
+    if (trackEl && trackDetail) {
+      if (d.state === 'tracking') {
+        trackEl.style.display = 'block';
+        trackDetail.innerHTML = `Confirming <b>${d.trackDir === 'above' ? 'CE (crossed up)' : 'PE (crossed down)'}</b> — ${d.trackMinutesConfirmed}/${d.params?.confirmMin ?? '?'} minutes held`;
+      } else {
+        trackEl.style.display = 'none';
+      }
+    }
+
+    STR_SM.position = d.position || null;
+    let liveSpot = null;
+    if (STR_SM.position) {
+      try {
+        const sr = await fetch(engineUrl() + '/engine/straddle/spot');
+        const sd = await sr.json();
+        if (sd.ok) liveSpot = sd.spot;
+      } catch(_) {}
+    }
+    smUpdatePositionUI(liveSpot);
+    if (d.trades) { STR_SM.trades = d.trades; smRenderTrades(); }
+    if (!smParamsDirty) smApplyParamsToFields(d.params);
+
+    if (d.active && !STR_SM.pollTimer) {
+      STR_SM.pollTimer = setInterval(smSyncFromEngine, 5000);
+    } else if (!d.active && STR_SM.pollTimer) {
+      clearInterval(STR_SM.pollTimer); STR_SM.pollTimer = null;
+    }
+  } catch(e) { /* transient network blip — next 5s poll or next tab-open retries */ }
+}
+
+async function smManualExit() {
+  smLog('Manual exit requested — closing current position on VM', 'w');
+  try {
+    const r = await fetch(engineUrl() + '/engine/sma/exit', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) smLog('Exit sent to VM', 's'); else smLog('Exit failed: ' + d.error, 'e');
+  } catch(e) { smLog('Exit error: ' + e.message, 'e'); }
+  setTimeout(smSyncFromEngine, 1500);
+}
+
+async function smUpdateDefaults() {
+  const body = {
+    smaLen: parseInt(q('sm-sma-len')?.value) || 120,
+    confirmMin: parseInt(q('sm-confirm-min')?.value) || 10,
+    otmSteps: parseInt(q('sm-otm-steps')?.value) || 0,
+    target: smNum('sm-target', 20), stopLoss: smNum('sm-stoploss', 10),
+    hardCloseMin: parseInt(q('sm-hardclose')?.value) || 15,
+    lots: parseInt(q('sm-lots')?.value) || 6,
+    autoLots: q('sm-autolots')?.checked !== false,
+    deployPct: smNum('sm-deploy', 95), floorPremium: smNum('sm-floor', 50),
+  };
+  const statusEl = q('sm-defaults-status');
+  try {
+    const r = await fetch(engineUrl() + '/engine/sma/defaults', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      smParamsDirty = false;
+      if (statusEl) statusEl.textContent = '✅ Saved — this is the default from tomorrow (and applied live right now).';
+      smLog(`Defaults updated: SMA${body.smaLen} confirm=${body.confirmMin}min OTM=${body.otmSteps} target=${body.target}pt SL=${body.stopLoss}pt hardClose=${body.hardCloseMin}min Deploy=${body.deployPct}% Floor=₹${body.floorPremium}`, 's');
+    } else if (statusEl) statusEl.textContent = '❌ Failed: ' + d.error;
+  } catch(e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
+}
+
+async function smFetchDefaults() {
+  try {
+    const r = await fetch(engineUrl() + '/engine/sma/defaults');
+    const d = await r.json();
+    if (d.ok) smApplyParamsToFields(d.defaults);
+  } catch(_) {}
+}
+
+function smUpdatePositionUI(liveSpot) {
+  const posDiv = q('sm-position');
+  const detail = q('sm-pos-detail');
+  if (!posDiv || !detail) return;
+  if (!STR_SM.position) { posDiv.style.display = 'none'; return; }
+  posDiv.style.display = 'block';
+  const p = STR_SM.position;
+  const move = liveSpot ? (p.type === 'CE' ? liveSpot - p.entrySpot : p.entrySpot - liveSpot).toFixed(1) : '—';
+  const moveColor = liveSpot ? ((p.type === 'CE' ? liveSpot - p.entrySpot : p.entrySpot - liveSpot) >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--dim)';
+  detail.innerHTML = `
+    <div>${p.strike}${p.type} × ${p.lots} lots</div>
+    <div>Entry spot: ${p.entrySpot} | Live: ${liveSpot ?? '—'} | Move: <span style="color:${moveColor}">${move}pts</span></div>
+    <div style="color:#aabbcc;font-size:10px">Quoted ₹${p.quotedPrice ?? '?'} · Entry fill ${p.entryPrice != null ? '₹'+p.entryPrice : 'pending'}</div>
+    <div style="color:#aabbcc;font-size:10px">Target +${p.target}pt · Stop -${p.stopLoss}pt · entered ${new Date(p.entryTime).toLocaleTimeString('en-IN')}</div>
+  `;
+}
+
+function smRenderTrades() {
+  const el = q('sm-trades');
+  const header = q('sm-trades-header');
+  if (!el) return;
+  if (!STR_SM.trades.length) {
+    el.innerHTML = '<div style="color:#aabbcc;font-size:11px;text-align:center;padding:16px">No trades yet today</div>';
+    if (header) header.textContent = "TODAY'S TRADES";
+    return;
+  }
+  const totalPnl = STR_SM.trades.reduce((s, t) => s + (t.pnlRs || 0), 0);
+  if (header) header.innerHTML = `TODAY'S TRADES <span style="color:${totalPnl>=0?'var(--green)':'var(--red)'}">(₹${totalPnl>=0?'+':''}${totalPnl.toFixed(0)})</span>`;
+  el.innerHTML = STR_SM.trades.map(t => {
+    const pnl = t.pnlRs || 0;
+    const col = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div style="background:#1a2535;border:1px solid #2a3f55;border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:11px">
+      <div style="display:flex;justify-content:space-between">
+        <span>${t.strike}${t.type} × ${t.lots}</span>
+        <span style="color:${col};font-weight:600">₹${pnl>=0?'+':''}${pnl.toFixed(0)}</span>
+      </div>
+      <div style="color:#aabbcc;font-size:10px;margin-top:2px">
+        ${new Date(t.entryTime).toLocaleTimeString('en-IN')} → ${t.closeTime ? new Date(t.closeTime).toLocaleTimeString('en-IN') : '?'} · ${t.exitReason || '?'} · quoted ₹${t.quotedPrice ?? '?'} → entry ₹${t.entryPrice ?? '?'} → exit ₹${t.exitPrice ?? '?'}
       </div>
     </div>`;
   }).join('');

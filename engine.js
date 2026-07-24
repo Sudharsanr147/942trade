@@ -677,6 +677,9 @@ function seStart(params = {}) {
   if (SE_BN.active) {
     seBnStop('NIFTY straddle activated');
   }
+  if (SM.active) {
+    smStop('NIFTY straddle activated');
+  }
   saveState();
   seLg(`Straddle engine started — TP=${SE.tp}pt SL=${SE.sl}pt Vol≥${SE.volThr}×`, 's');
   seScheduleNextCheck();
@@ -693,23 +696,18 @@ function seStop(reason = 'Manual') {
   // turn it on explicitly from the SR tab.
 }
 
-// Called whenever a fresh Upstox token arrives (morning login, or just
-// reopening the app with a cached token). Mirrors how the 30-slot SR system
-// USED TO behave: on by default, stays on across app close/reopen and VM
-// restarts, resets to "on" every new IST day unless the user explicitly
-// stopped it THAT day. (SR itself is now the opposite — off by default;
-// see srResetIfNewDay.)
-function seAutoStartIfNeeded() {
+// NIFTY straddle is now opt-in every day, same treatment as SR and
+// BankNifty straddle — it no longer auto-starts on token push. SMA-NIFTY
+// is the one always-on-by-default engine now; see smAutoStartIfNeeded().
+// This only rolls the day boundary over (fresh trades/log, active reset to
+// off) for the case where the VM stays up overnight without restarting.
+function seResetIfNewDay() {
   const today = seTodayStr();
-  if (SE.dateStr !== today) { SE.dateStr = today; SE.trades = []; SE.log = []; SE.position = null; SE.stoppedToday = false; }
-  if (SE.active) return;               // already running — nothing to do
-  if (SE.stoppedToday) {                // user turned it off today — respect that until tomorrow
-    lg('[Straddle] Token received — auto-start skipped (stopped by user today)', 'i');
-    return;
+  if (SE.dateStr !== today) {
+    SE.dateStr = today; SE.trades = []; SE.log = [];
+    SE.position = null; SE.stoppedToday = false; SE.active = false;
+    seSaveState();
   }
-  const d = seLoadDefaults();
-  lg('[Straddle] Token received — auto-starting (always-on by default)', 's');
-  seStart(d);
 }
 
 function seScheduleNextCheck() {
@@ -1190,6 +1188,9 @@ function seBnStart(params = {}) {
   if (SE.active) {
     seStop('BankNifty straddle activated');
   }
+  if (SM.active) {
+    smStop('BankNifty straddle activated');
+  }
   saveState();
   seBnLg(`Straddle engine started — TP=${SE_BN.tp}pt SL=${SE_BN.sl}pt Vol≥${SE_BN.volThr}×`, 's');
   seBnScheduleNextCheck();
@@ -1210,8 +1211,8 @@ function seBnStop(reason = 'Manual') {
 // auto-starts on token push. This only rolls the day boundary over (fresh
 // trades/log, active reset to off) for the case where the VM stays up
 // overnight without restarting, so seBnLoadState()'s own day-check never
-// runs. Mirrors srResetIfNewDay(); NIFTY is the only strategy that's
-// on-by-default — see seAutoStartIfNeeded().
+// runs. Mirrors srResetIfNewDay(); SMA-NIFTY is the only strategy that's
+// on-by-default — see smAutoStartIfNeeded().
 function seBnResetIfNewDay() {
   const today = seTodayStr();
   if (SE_BN.dateStr !== today) {
@@ -1546,6 +1547,393 @@ function seBnClosePosition() {
   SE_BN.position = null;
   if (SE_BN.monTimer) { clearInterval(SE_BN.monTimer); SE_BN.monTimer = null; }
   seBnLg(`Position closed. Trades today: ${SE_BN.trades.length}`, 's');
+}
+
+// ══════════════════════════════════════════════════════════
+// SMA CROSSOVER ENGINE (NIFTY) — separate strategy from the
+// straddle engine. Watches for spot crossing its own SMA and
+// staying on the new side for a confirmation window, then buys
+// a single directional leg (CE or PE, not a straddle).
+// ══════════════════════════════════════════════════════════
+const SM_STATE_FILE    = '/home/ubuntu/engine-sm-state.json';
+const SM_DEFAULTS_FILE = '/home/ubuntu/engine-sm-defaults.json';
+
+const SM_FACTORY_DEFAULTS = {
+  smaLen: 120,       // SMA period in 1-min candles (today's candles only; fewer used if fewer available)
+  confirmMin: 10,    // minutes spot must stay on the new side of the SMA before entry
+  otmSteps: 0,       // 0 = ATM; N = N strikes OTM (CE: strike+N*step, PE: strike-N*step)
+  target: 20,        // index points
+  stopLoss: 10,      // index points
+  hardCloseMin: 15,  // force-exit this many minutes after entry regardless
+  lots: 6, autoLots: true, deployPct: 95, floorPrem: 50,
+};
+
+const SM = {
+  active: false,
+  smaLen: SM_FACTORY_DEFAULTS.smaLen, confirmMin: SM_FACTORY_DEFAULTS.confirmMin,
+  otmSteps: SM_FACTORY_DEFAULTS.otmSteps, target: SM_FACTORY_DEFAULTS.target,
+  stopLoss: SM_FACTORY_DEFAULTS.stopLoss, hardCloseMin: SM_FACTORY_DEFAULTS.hardCloseMin,
+  lots: SM_FACTORY_DEFAULTS.lots, autoLots: SM_FACTORY_DEFAULTS.autoLots,
+  deployPct: SM_FACTORY_DEFAULTS.deployPct, floorPrem: SM_FACTORY_DEFAULTS.floorPrem,
+
+  checkTimer: null, monTimer: null,
+  state: 'idle',          // idle | tracking
+  trackDir: null,         // 'above' | 'below' — side being confirmed while tracking
+  trackMinutesConfirmed: 0,
+  lastSide: null,         // side as of the previous minute's check, for crossover detection
+
+  position: null,         // {type:'CE'|'PE', key, strike, entrySpot, entryTime, lots, target, stopLoss, oid, quotedPrice, entryPrice, exitDeadlineTs}
+  trades: [], log: [], dateStr: null, stoppedToday: false,
+};
+
+function smSaveState() {
+  try {
+    fs.writeFileSync(SM_STATE_FILE, JSON.stringify({
+      active: SM.active, dateStr: SM.dateStr, stoppedToday: SM.stoppedToday,
+      smaLen: SM.smaLen, confirmMin: SM.confirmMin, otmSteps: SM.otmSteps,
+      target: SM.target, stopLoss: SM.stopLoss, hardCloseMin: SM.hardCloseMin,
+      lots: SM.lots, autoLots: SM.autoLots, deployPct: SM.deployPct, floorPrem: SM.floorPrem,
+      state: SM.state, trackDir: SM.trackDir, trackMinutesConfirmed: SM.trackMinutesConfirmed,
+      lastSide: SM.lastSide, position: SM.position, trades: SM.trades, log: SM.log,
+    }));
+  } catch(e) { console.error('smSaveState:', e.message); }
+}
+
+function smLoadState() {
+  const today = seTodayStr();   // shared IST-date helper, already defined for the straddle engine
+  try {
+    if (fs.existsSync(SM_STATE_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(SM_STATE_FILE, 'utf8'));
+      Object.assign(SM, {
+        smaLen: saved.smaLen ?? SM.smaLen, confirmMin: saved.confirmMin ?? SM.confirmMin,
+        otmSteps: saved.otmSteps ?? SM.otmSteps, target: saved.target ?? SM.target,
+        stopLoss: saved.stopLoss ?? SM.stopLoss, hardCloseMin: saved.hardCloseMin ?? SM.hardCloseMin,
+        lots: saved.lots ?? SM.lots, autoLots: saved.autoLots ?? SM.autoLots,
+        deployPct: saved.deployPct ?? SM.deployPct, floorPrem: saved.floorPrem ?? SM.floorPrem,
+      });
+      if (saved.dateStr === today) {
+        SM.dateStr = today;
+        SM.stoppedToday = !!saved.stoppedToday;
+        SM.trades = Array.isArray(saved.trades) ? saved.trades : [];
+        SM.log    = Array.isArray(saved.log) ? saved.log : [];
+        SM.state  = saved.state || 'idle';
+        SM.trackDir = saved.trackDir || null;
+        SM.trackMinutesConfirmed = saved.trackMinutesConfirmed || 0;
+        SM.lastSide = saved.lastSide || null;
+        SM.position = saved.position || null;
+        lg(`📂 [SMA] Same-day state restored: ${SM.trades.length} trade(s), state=${SM.state}, position ${SM.position ? 'OPEN' : 'none'}, wasActive=${!!saved.active}`, 'i');
+        if (saved.active && !SM.stoppedToday) {
+          SM.active = true;
+          smScheduleNextCheck();
+          if (SM.position) {
+            smStartMonitor();
+            const msLeft = (SM.position.exitDeadlineTs || 0) - Date.now();
+            if (msLeft > 0) {
+              setTimeout(() => smTimeExit(), msLeft);
+              lg(`⏱ [SMA] Exit timer restored (${Math.floor(msLeft/1000)}s)`, 'i');
+            } else {
+              lg('⚠️ [SMA] Exit time already passed during downtime — closing now', 'w');
+              smTimeExit();
+            }
+          }
+        }
+      } else {
+        SM.dateStr = today; SM.stoppedToday = false; SM.trades = []; SM.log = [];
+        SM.state = 'idle'; SM.trackDir = null; SM.trackMinutesConfirmed = 0; SM.lastSide = null; SM.position = null;
+      }
+    } else {
+      SM.dateStr = today;
+    }
+  } catch(e) {
+    console.error('smLoadState:', e.message);
+    SM.dateStr = today;
+  }
+}
+
+function smSaveDefaults(d) {
+  try { fs.writeFileSync(SM_DEFAULTS_FILE, JSON.stringify(d)); } catch(e) { console.error('smSaveDefaults:', e.message); }
+}
+function smLoadDefaults() {
+  try {
+    if (fs.existsSync(SM_DEFAULTS_FILE)) return { ...SM_FACTORY_DEFAULTS, ...JSON.parse(fs.readFileSync(SM_DEFAULTS_FILE, 'utf8')) };
+  } catch(e) { console.error('smLoadDefaults:', e.message); }
+  return { ...SM_FACTORY_DEFAULTS };
+}
+
+function smLg(msg, type='i') {
+  const ts = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'});
+  SM.log.unshift(`[${ts}] ${msg}`);
+  if (SM.log.length > 3000) SM.log.pop();
+  lg(`[SMA] ${msg}`, type);
+  smSaveState();
+}
+
+// Market hours for NEW signal tracking/entries — deliberately narrower than
+// the straddle engine's 09:20-15:25: a confirmMin(10) + hardCloseMin(15)
+// cycle needs ~25 min to play out, so entries stop being scheduled once
+// there isn't enough day left, even though existing positions still get
+// monitored to their normal exit regardless of the clock.
+function smIsMarket() {
+  const ist  = new Date(Date.now() + 5.5 * 3600000);
+  const hhmm = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  return hhmm >= 9*60+16 && hhmm <= 15*60 - (SM.confirmMin + SM.hardCloseMin + 5);
+}
+
+function smStart(params = {}) {
+  const today = seTodayStr();
+  if (SM.dateStr !== today) {
+    SM.dateStr = today; SM.trades = []; SM.log = [];
+    SM.state = 'idle'; SM.trackDir = null; SM.trackMinutesConfirmed = 0; SM.lastSide = null; SM.position = null;
+  }
+  SM.stoppedToday = false;
+  if (SM.active) { smLg('Already active', 'w'); return; }
+  Object.assign(SM, {
+    active: true,
+    smaLen:       params.smaLen       || SM.smaLen,
+    confirmMin:   params.confirmMin   || SM.confirmMin,
+    otmSteps:     params.otmSteps     ?? SM.otmSteps,
+    target:       params.target       || SM.target,
+    stopLoss:     params.stopLoss     || SM.stopLoss,
+    hardCloseMin: params.hardCloseMin || SM.hardCloseMin,
+    lots:         params.lots         || SM.lots,
+    autoLots:     params.autoLots     !== undefined ? params.autoLots : SM.autoLots,
+    deployPct:    params.deployPct    || SM.deployPct,
+    floorPrem:    params.floorPrem    || SM.floorPrem,
+  });
+  // Same exclusivity group as SR / straddle-NF / straddle-BN
+  if (ST.srActive)  { ST.srActive = false;  lg('SR deactivated — SMA engine started', 'w'); }
+  if (SE.active)    { seStop('SMA engine activated'); }
+  if (SE_BN.active) { seBnStop('SMA engine activated'); }
+  saveState();
+  smLg(`SMA engine started — SMA${SM.smaLen}, confirm ${SM.confirmMin}min, target ${SM.target}pt, SL ${SM.stopLoss}pt, hard-close ${SM.hardCloseMin}min`, 's');
+  smScheduleNextCheck();
+}
+
+function smStop(reason = 'Manual') {
+  SM.active = false;
+  SM.stoppedToday = true;
+  if (SM.checkTimer) { clearTimeout(SM.checkTimer); SM.checkTimer = null; }
+  if (SM.monTimer)   { clearInterval(SM.monTimer);  SM.monTimer   = null; }
+  smLg(`SMA engine stopped (${reason})`, 'w');
+}
+
+// SMA-NIFTY is now the always-on-by-default engine — mirrors how NIFTY
+// straddle used to behave: stays on across app close/reopen and VM
+// restarts, resets to "on" every new IST day unless explicitly stopped
+// THAT day. Every other module (SR, NIFTY straddle, BankNifty straddle)
+// is opt-in every day; selecting any of them switches this off
+// automatically via the exclusivity checks in their own start functions.
+function smAutoStartIfNeeded() {
+  const today = seTodayStr();
+  if (SM.dateStr !== today) {
+    SM.dateStr = today; SM.trades = []; SM.log = [];
+    SM.state = 'idle'; SM.trackDir = null; SM.trackMinutesConfirmed = 0; SM.lastSide = null;
+    SM.position = null; SM.stoppedToday = false;
+  }
+  if (SM.active) return;
+  if (SM.stoppedToday) {
+    lg('[SMA] Token received — auto-start skipped (stopped by user today)', 'i');
+    return;
+  }
+  const d = smLoadDefaults();
+  lg('[SMA] Token received — auto-starting (always-on by default)', 's');
+  smStart(d);
+}
+
+function smScheduleNextCheck() {
+  if (!SM.active) return;
+  const now  = new Date();
+  const secs = now.getSeconds();
+  const ms   = now.getMilliseconds();
+  const msTo50 = secs < 50 ? (50 - secs) * 1000 - ms : (60 - secs + 50) * 1000 - ms;
+  SM.checkTimer = setTimeout(async () => {
+    if (SM.active) { await smCheck(); smScheduleNextCheck(); }
+  }, msTo50);
+}
+
+// Builds the SMA window: today's candles so far, topped up with the tail
+// end of the most recent previous trading day if today alone isn't enough
+// yet (e.g. early morning). Walks backwards up to 7 calendar days to find
+// a trading day with data (skips weekends/holidays automatically since
+// those simply return empty). Returns candles oldest-to-newest, each as
+// [ts, open, high, low, close, vol] to match the intraday endpoint's shape.
+async function smGetSmaWindow(len) {
+  const cd = await upstox('/v2/historical-candle/intraday/NSE_INDEX%7CNifty%2050/1minute');
+  const todayCandles = (cd?.data?.candles || []).slice().reverse();   // API is most-recent-first; reverse -> chronological
+  if (todayCandles.length >= len) return todayCandles.slice(-len);
+
+  const needed = len - todayCandles.length;
+  let prevCandles = [];
+  const todayIst = new Date(Date.now() + 5.5 * 3600000);
+  for (let back = 1; back <= 7 && prevCandles.length === 0; back++) {
+    const d = new Date(todayIst);
+    d.setUTCDate(d.getUTCDate() - back);
+    const dateStr = d.toISOString().slice(0, 10);
+    try {
+      const dayCandles = await btGetCandles(dateStr);   // already chronological: [{time,open,high,low,close}]
+      if (dayCandles.length > 0) prevCandles = dayCandles;
+    } catch(_) {}
+  }
+  const prevTail = prevCandles.slice(-needed).map(c => [null, c.open, c.high, c.low, c.close, 0]);
+  return [...prevTail, ...todayCandles];
+}
+
+async function smCheck() {
+  if (!SM.active || SM.position) return;
+  if (!smIsMarket()) return;
+  if (!ST.token) { smLg('No token — skip', 'w'); return; }
+
+  try {
+    const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+    if (!spot) { smLg('Spot unavailable', 'w'); return; }
+
+    const windowCandles = await smGetSmaWindow(SM.smaLen);
+    if (windowCandles.length === 0) { smLg('No candle history yet — skip', 'w'); return; }
+    const usedPrevDay = windowCandles.length >= SM.smaLen && windowCandles.some(c => c[0] === null);
+    const sma = windowCandles.reduce((s, c) => s + parseFloat(c[4]), 0) / windowCandles.length;   // close = index 4
+    const side = spot >= sma ? 'above' : 'below';
+
+    smLg(`Spot ${spot} vs SMA${SM.smaLen}(${windowCandles.length} candles${usedPrevDay ? ', incl. prev day' : ''}) ${sma.toFixed(1)} → ${side}`);
+
+    if (SM.state === 'idle') {
+      if (SM.lastSide !== null && SM.lastSide !== side) {
+        SM.state = 'tracking';
+        SM.trackDir = side;
+        SM.trackMinutesConfirmed = 0;
+        smLg(`🔀 Crossover — now ${side} SMA${SM.smaLen} — tracking ${SM.confirmMin}min for confirmation`, 's');
+      }
+    } else if (SM.state === 'tracking') {
+      if (side === SM.trackDir) {
+        SM.trackMinutesConfirmed++;
+        smLg(`Tracking: ${SM.trackMinutesConfirmed}/${SM.confirmMin}min confirmed ${SM.trackDir}`);
+        if (SM.trackMinutesConfirmed >= SM.confirmMin) {
+          smLg(`✅ Confirmed ${SM.confirmMin}min ${SM.trackDir} SMA${SM.smaLen} — entering next minute`, 's');
+          const dir = SM.trackDir;
+          SM.state = 'idle'; SM.trackDir = null; SM.trackMinutesConfirmed = 0;
+          const now4 = new Date();
+          const msToNextMin = (60 - now4.getSeconds()) * 1000 - now4.getMilliseconds() + 100;
+          setTimeout(() => smEnter(dir === 'above' ? 'CE' : 'PE', spot), msToNextMin);
+        }
+      } else {
+        smLg(`❌ Crossed back to ${side} after ${SM.trackMinutesConfirmed}/${SM.confirmMin}min — tracking reset`, 'w');
+        SM.state = 'idle'; SM.trackDir = null; SM.trackMinutesConfirmed = 0;
+      }
+    }
+    SM.lastSide = side;
+    smSaveState();
+  } catch(e) { smLg('Check error: ' + e.message, 'e'); }
+}
+
+function smRecordFill(oid, field, price) {
+  if (price == null) return;
+  if (SM.position && SM.position.oid === oid) SM.position[field] = price;
+  const t = SM.trades.find(x => x.oid === oid);
+  if (t) t[field] = price;
+  smSaveState();
+}
+
+async function smEnter(direction, signalSpot) {
+  if (!SM.active || SM.position) return;
+  try {
+    smLg(`Placing ${direction}...`, 'w');
+    const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+    const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price) || signalSpot;
+    const baseAtm = Math.round(spot / 50) * 50;
+    const strike = direction === 'CE' ? baseAtm + SM.otmSteps*50 : baseAtm - SM.otmSteps*50;
+
+    let calcLots = SM.lots;
+    const expiry = await getLiveExpiry('NF');
+    const inst = await findInstrument(expiry, strike, direction, 'NF');
+
+    if (SM.autoLots) {
+      try {
+        const funds = await getAvailableFunds();
+        const deployable = funds * SM.deployPct / 100;
+        const effPrem = (SM.floorPrem > 0 && inst.ltp < SM.floorPrem) ? SM.floorPrem : inst.ltp;
+        const costPerLot = effPrem * 65;
+        if (costPerLot > 0) {
+          calcLots = Math.max(1, Math.floor(deployable / costPerLot));
+          smLg(`💰 Balance ₹${funds.toFixed(0)} | ${SM.deployPct}% → ₹${deployable.toFixed(0)} | cost/lot ₹${costPerLot.toFixed(0)} → ${calcLots} lots`, 's');
+        }
+      } catch(e) { smLg('Auto-lots failed: ' + e.message + ' — using ' + calcLots, 'w'); }
+    }
+
+    const qty = calcLots * 65;
+    smLg(`📐 Quoted premium before order: ${strike}${direction} ₹${inst.ltp}`, 'i');
+    const oid = await placeMarket(inst.key, 'BUY', qty, 'D', 65);
+
+    const exitDeadlineTs = Date.now() + SM.hardCloseMin * 60000;
+    SM.position = {
+      type: direction, key: inst.key, strike,
+      entrySpot: spot, entryTime: new Date().toISOString(),
+      lots: calcLots, target: SM.target, stopLoss: SM.stopLoss,
+      oid, quotedPrice: inst.ltp, entryPrice: null, exitPrice: null,
+      exitDeadlineTs,
+    };
+    smLg(`✅ ENTERED ${strike}${direction} × ${calcLots} lots @ spot ${spot}`, 's');
+    smLg(`Target: spot ${direction==='CE'?'+':'-'}${SM.target}pts | SL: spot ${direction==='CE'?'-':'+'}${SM.stopLoss}pts | hard-close ${SM.hardCloseMin}min`, 'i');
+
+    smStartMonitor();
+    setTimeout(() => smTimeExit(), SM.hardCloseMin * 60000);
+
+    (async () => {
+      const fill = await waitFill(oid).catch(e => { smLg(`Entry fill confirm failed: ${e.message}`, 'w'); return null; });
+      smRecordFill(oid, 'entryPrice', fill);
+      if (fill != null) smLg(`📋 Entry fill confirmed: ₹${fill}`, 'i');
+    })();
+  } catch(e) { smLg('Entry error: ' + e.message, 'e'); }
+}
+
+function smStartMonitor() {
+  if (SM.monTimer) clearInterval(SM.monTimer);
+  SM.monTimer = setInterval(async () => {
+    if (!SM.position) { clearInterval(SM.monTimer); SM.monTimer = null; return; }
+    try {
+      const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050');
+      const spot = parseFloat(Object.values(sd?.data||{})[0]?.last_price);
+      if (!spot) return;
+      const p = SM.position;
+      const move = p.type === 'CE' ? (spot - p.entrySpot) : (p.entrySpot - spot);
+      if (move >= p.target)      await smClose('TARGET', spot);
+      else if (move <= -p.stopLoss) await smClose('STOPLOSS', spot);
+    } catch(_) {}
+  }, 500);
+}
+
+async function smClose(reason, closeSpot) {
+  if (!SM.position) return;
+  if (SM.monTimer) { clearInterval(SM.monTimer); SM.monTimer = null; }
+  const p = SM.position;
+  try {
+    const qty = p.lots * 65;
+    const oid = await placeMarket(p.key, 'SELL', qty, 'D', 65);
+    const DELTA = 0.4;   // established NIFTY convention for rough P&L estimate — real fill confirmed separately below
+    const move = p.type === 'CE' ? (closeSpot - p.entrySpot) : (p.entrySpot - closeSpot);
+    const optPnlPts = move * DELTA;
+    const pnlRs = optPnlPts * 65 * p.lots;
+
+    const trade = { ...p, exitOid: oid, exitReason: reason, exitSpot: closeSpot,
+                     pnlPts: optPnlPts, pnlRs, closeTime: new Date().toISOString() };
+    SM.trades.unshift(trade);
+    if (SM.trades.length > 300) SM.trades.pop();
+    SM.position = null;
+    smLg(`${p.type} closed (${reason}): order ${oid} | P&L (est): ${optPnlPts>=0?'+':''}${optPnlPts.toFixed(2)}pts = ₹${pnlRs>=0?'+':''}${pnlRs.toFixed(0)}`, reason==='TARGET'?'s':'w');
+
+    (async () => {
+      const fill = await waitFill(oid).catch(e => { smLg(`Exit fill confirm failed: ${e.message}`, 'w'); return null; });
+      smRecordFill(oid, 'exitPrice', fill);
+      if (fill != null) smLg(`📋 Exit fill confirmed: ₹${fill}`, 'i');
+    })();
+  } catch(e) { smLg('Close error: ' + e.message, 'e'); }
+}
+
+async function smTimeExit() {
+  if (!SM.position) return;
+  smLg('⏱ Hard close — time limit reached', 'w');
+  const sd = await upstox('/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050').catch(()=>null);
+  const spot = sd ? parseFloat(Object.values(sd?.data||{})[0]?.last_price) : SM.position.entrySpot;
+  await smClose('TIME', spot);
 }
 
 
@@ -2090,6 +2478,9 @@ const server = http.createServer(async (req, res) => {
     if (ST.srActive && SE_BN.active) {
       seBnStop('SR activated');
     }
+    if (ST.srActive && SM.active) {
+      smStop('SR activated');
+    }
     if (ST.srActive) {
       // Arm the roster NOW. Without this, a roster pushed while SR was off
       // (the normal case now that off is the default) would stay un-armed
@@ -2370,6 +2761,100 @@ const server = http.createServer(async (req, res) => {
     } catch(e) { return ok({ ok: false, error: e.message }); }
   }
 
+  // ══ SMA CROSSOVER ENGINE ROUTES (NIFTY) ══════════════════
+  if (p === '/engine/sma/start' && req.method === 'POST') {
+    if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
+    const d = smLoadDefaults();
+    smStart({
+      smaLen:       body.smaLen       || d.smaLen,
+      confirmMin:   body.confirmMin   || d.confirmMin,
+      otmSteps:     body.otmSteps     ?? d.otmSteps,
+      target:       body.target       || d.target,
+      stopLoss:     body.stopLoss     || d.stopLoss,
+      hardCloseMin: body.hardCloseMin || d.hardCloseMin,
+      lots:         body.lots         || d.lots,
+      autoLots:     body.autoLots     !== undefined ? body.autoLots : d.autoLots,
+      deployPct:    body.deployPct    || d.deployPct,
+      floorPrem:    body.floorPremium || d.floorPrem,
+    });
+    return ok({ ok: true, message: 'SMA engine started on VM' });
+  }
+
+  if (p === '/engine/sma/stop' && req.method === 'POST') {
+    smStop('Manual — user toggle');
+    return ok({ ok: true, message: 'SMA engine stopped for the rest of today' });
+  }
+
+  if (p === '/engine/sma/status' && req.method === 'GET') {
+    return ok({
+      ok: true,
+      active: SM.active, stoppedToday: SM.stoppedToday, dateStr: SM.dateStr,
+      state: SM.state, trackDir: SM.trackDir, trackMinutesConfirmed: SM.trackMinutesConfirmed,
+      position: SM.position, trades: SM.trades, log: SM.log,
+      params: { smaLen: SM.smaLen, confirmMin: SM.confirmMin, otmSteps: SM.otmSteps,
+                target: SM.target, stopLoss: SM.stopLoss, hardCloseMin: SM.hardCloseMin,
+                lots: SM.lots, autoLots: SM.autoLots, deployPct: SM.deployPct, floorPrem: SM.floorPrem },
+    });
+  }
+
+  if (p === '/engine/sma/report' && req.method === 'GET') {
+    const lines = [];
+    lines.push(`942 Trade — SMA crossover report (NIFTY) — ${SM.dateStr || seTodayStr()}`);
+    lines.push(`Active: ${SM.active} | Stopped by user today: ${SM.stoppedToday} | State: ${SM.state}${SM.state==='tracking' ? ' ('+SM.trackMinutesConfirmed+'/'+SM.confirmMin+'min '+SM.trackDir+')' : ''}`);
+    lines.push(`Params: SMA${SM.smaLen} confirm=${SM.confirmMin}min OTM=${SM.otmSteps} target=${SM.target}pt SL=${SM.stopLoss}pt hardClose=${SM.hardCloseMin}min Lots=${SM.lots}${SM.autoLots?' (auto)':''} Deploy=${SM.deployPct}% Floor=Rs${SM.floorPrem}`);
+    lines.push('');
+    if (SM.position) {
+      const p2 = SM.position;
+      lines.push(`OPEN POSITION: ${p2.strike}${p2.type} entry ${p2.entryTime} | spot ${p2.entrySpot} | ${p2.lots} lots`);
+      lines.push(`  quoted Rs${p2.quotedPrice ?? '?'} | entry fill Rs${p2.entryPrice ?? 'pending'}`);
+      lines.push('');
+    }
+    lines.push(`=== TRADES (${SM.trades.length}) ===`);
+    if (!SM.trades.length) lines.push('(none yet today)');
+    SM.trades.slice().reverse().forEach((t, i) => {
+      lines.push(`#${i+1}  ${t.strike}${t.type}  entry ${t.entryTime} spot ${t.entrySpot} ${t.lots} lots -> close ${t.closeTime || '?'}`);
+      lines.push(`  quoted Rs${t.quotedPrice ?? '?'} -> entry Rs${t.entryPrice ?? '?'} -> exit Rs${t.exitPrice ?? '?'}  [${t.exitReason || '?'}]  est P&L Rs${(t.pnlRs ?? 0).toFixed(0)}`);
+      lines.push('');
+    });
+    lines.push(`=== FULL LOG (${SM.log.length} lines, chronological) ===`);
+    SM.log.slice().reverse().forEach(l => lines.push(l));
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end(lines.join('\n'));
+    return;
+  }
+
+  if (p === '/engine/sma/exit' && req.method === 'POST') {
+    if (!SM.position) return ok({ ok: false, error: 'No open position' });
+    await smTimeExit();
+    return ok({ ok: true, message: 'Manual exit triggered' });
+  }
+
+  if (p === '/engine/sma/defaults' && req.method === 'GET') {
+    return ok({ ok: true, defaults: smLoadDefaults() });
+  }
+
+  if (p === '/engine/sma/defaults' && req.method === 'POST') {
+    const cur = smLoadDefaults();
+    const next = {
+      smaLen:       body.smaLen       ?? cur.smaLen,
+      confirmMin:   body.confirmMin   ?? cur.confirmMin,
+      otmSteps:     body.otmSteps     ?? cur.otmSteps,
+      target:       body.target       ?? cur.target,
+      stopLoss:     body.stopLoss     ?? cur.stopLoss,
+      hardCloseMin: body.hardCloseMin ?? cur.hardCloseMin,
+      lots:         body.lots         ?? cur.lots,
+      autoLots:     body.autoLots     !== undefined ? body.autoLots : cur.autoLots,
+      deployPct:    body.deployPct    ?? cur.deployPct,
+      floorPrem:    body.floorPremium ?? body.floorPrem ?? cur.floorPrem,
+    };
+    smSaveDefaults(next);
+    if (SM.active) Object.assign(SM, next);
+    lg(`[SMA] Defaults updated: SMA${next.smaLen} confirm=${next.confirmMin}min OTM=${next.otmSteps} target=${next.target}pt SL=${next.stopLoss}pt hardClose=${next.hardCloseMin}min Deploy=${next.deployPct}% Floor=₹${next.floorPrem} Lots=${next.lots}`, 's');
+    smSaveState();
+    return ok({ ok: true, defaults: next });
+  }
+
+
   // ── GET /engine/straddle/volcheck ───────────────────────
   if (p === '/engine/straddle/volcheck' && req.method === 'GET') {
     if (!ST.token) return ok({ ok: false, error: 'No token' }, 400);
@@ -2490,12 +2975,15 @@ const server = http.createServer(async (req, res) => {
     autoStartTickCollector();
     // SR resets to off (its default) on a new day even if the process never restarted
     srResetIfNewDay();
-    // BankNifty straddle is opt-in every day too — same reasoning as SR
+    // NIFTY straddle is opt-in every day now too — same reasoning as SR
+    seResetIfNewDay();
+    // BankNifty straddle is opt-in every day too
     seBnResetIfNewDay();
-    // Always-on straddle: NIFTY resumes automatically unless user turned it off today
-    seAutoStartIfNeeded();
+    // Always-on by default: SMA-NIFTY resumes automatically unless user turned it off today
+    smAutoStartIfNeeded();
     return ok({ ok: true, straddleActive: SE.active, straddleStoppedToday: SE.stoppedToday,
-                straddleBnActive: SE_BN.active, straddleBnStoppedToday: SE_BN.stoppedToday, srActive: ST.srActive });
+                straddleBnActive: SE_BN.active, straddleBnStoppedToday: SE_BN.stoppedToday,
+                smaActive: SM.active, srActive: ST.srActive });
   }
 
   // ── POST /engine/arm (manual) ───────────────────────────
@@ -2926,6 +3414,7 @@ server.listen(PORT, '0.0.0.0', () => {
   loadSlots();
   seLoadState();
   seBnLoadState();
+  smLoadState();
   btScheduleDailyRun();
   lg('BT daily scheduler started (fires at 15:32 IST)', 'i');
 });
